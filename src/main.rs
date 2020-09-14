@@ -1,8 +1,12 @@
 #![allow(dead_code)]
 
+extern crate cpal;
+
 mod prelude;
 mod note;
 mod clock;
+mod noise;
+mod output;
 
 use prelude::*;
 
@@ -69,11 +73,9 @@ impl OscillatorStream {
     }
 
     fn fill_sample_sine(&self, sample: &mut Sample) {
-        let freq = self.state.frequency;
-        let start_offset = self.clock.get_nanoseconds();
-        for i in 0..SAMPLE_SIZE {
-            
-        }
+        //let freq = self.state.frequency;
+        //let time_offset = self.clock.get_nanoseconds();
+        //sine(TAU * freq)
     }
 }
 
