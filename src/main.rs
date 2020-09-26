@@ -111,5 +111,13 @@ fn main() -> Result<(), ()> {
         return Err(());
     }
 
+    if let Err(err) = cpal_output.play() {
+        let msg = format!("Failed to play output stream: {}", err);
+        println!("{}", msg);
+        return Err(());
+    }
+
+    std::thread::sleep(std::time::Duration::from_secs(1));
+
     Ok(())
 }
