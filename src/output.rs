@@ -4,16 +4,16 @@ mod cpal_audio_output;
 use error::{AudioOutputResult, AudioOutputError};
 use cpal_audio_output::CpalAudioOutput;
 
-enum OutputDeviceType {
+pub enum OutputDeviceType {
     Cpal
 }
 
-struct Output {
+pub struct Output {
     cpal_out: Option<CpalAudioOutput>
 }
 
 impl Output {
-    fn new(output_device_type: OutputDeviceType) -> AudioOutputResult<Self> {
+    pub fn new(output_device_type: OutputDeviceType) -> AudioOutputResult<Self> {
         match output_device_type {
             OutputDeviceType::Cpal => {
                 let cpal_out = match CpalAudioOutput::new() {
@@ -26,5 +26,13 @@ impl Output {
                 Ok(Output{ cpal_out })
             }
         }
+    }
+
+    pub fn get_cpal(&self) -> &Option<CpalAudioOutput> {
+        &self.cpal_out
+    }
+
+    pub fn get_cpal_mut(&mut self) -> &mut Option<CpalAudioOutput> {
+        &mut self.cpal_out
     }
 }

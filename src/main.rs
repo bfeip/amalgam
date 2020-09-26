@@ -72,13 +72,44 @@ impl OscillatorStream {
         }
     }
 
-    fn fill_sample_sine(&self, sample: &mut Sample) {
+    fn fill_sample_sine(&self, _sample: &mut Sample) {
         //let freq = self.state.frequency;
         //let time_offset = self.clock.get_nanoseconds();
         //sine(TAU * freq)
     }
 }
 
-fn main() {
-    println!("Hello, world!");
+fn main() -> Result<(), ()> {
+    // Test output by outputing noise
+    let output_result = output::Output::new(output::OutputDeviceType::Cpal);
+    let mut output = match output_result {
+        Ok(output) => output,
+        Err(err) => {
+            let msg = format!("Failed to create output: {}", err);
+            println!("{}", msg);
+            return Err(());
+        }
+    };
+
+    let cpal_output = match output.get_cpal_mut() {
+        Some(cpal_output) => cpal_output,
+        None => {
+            println!("Failed to get CPAL output");
+            return Err(());
+        }
+    };
+
+    let sample_format = cpal_output.get_sample_format();
+    let sample_output_result = match sample_format {
+        cpal::SampleFormat::F32 => cpal_output.set_sample_output(noise::cpal_output_noise::<f32>),
+        cpal::SampleFormat::I16 => cpal_output.set_sample_output(noise::cpal_output_noise::<i16>),
+        cpal::SampleFormat::U16 => cpal_output.set_sample_output(noise::cpal_output_noise::<u16>)
+    };
+    if let Err(err) = sample_output_result {
+        let msg = format!("Failed to set noise output stream: {}", err);
+        println!("{}", msg);
+        return Err(());
+    }
+
+    Ok(())
 }

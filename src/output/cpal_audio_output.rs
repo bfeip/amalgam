@@ -1,6 +1,5 @@
 extern crate cpal;
 
-use cpal::Data;
 use cpal::traits::HostTrait;
 use cpal::traits::DeviceTrait;
 use cpal::traits::StreamTrait;
@@ -12,6 +11,7 @@ pub struct CpalAudioOutput {
     device: cpal::Device,
     current_config: cpal::SupportedStreamConfig,
     stream: cpal::Stream,
+    playing: bool
 }
 
 impl CpalAudioOutput {
@@ -71,7 +71,10 @@ impl CpalAudioOutput {
             }
         };
 
-        Ok(CpalAudioOutput{ host, device, current_config, stream })
+        let playing = false;
+        Ok(CpalAudioOutput{
+            host, device, current_config, stream, playing
+        })
     }
 
     pub fn get_sample_format(&self) -> cpal::SampleFormat {
@@ -80,6 +83,39 @@ impl CpalAudioOutput {
 
     pub fn get_sample_rate(&self) {
         self.current_config.sample_rate();
+    }
+
+    pub fn set_sample_output<
+        T: cpal::Sample,
+        D: FnMut(&mut [T], &cpal::OutputCallbackInfo) + Send + 'static
+    > (&mut self, sample_output: D) -> AudioOutputResult<()> {
+        let sample_format = self.get_sample_format();
+        let stream_result = match sample_format {
+            cpal::SampleFormat::F32 => self.device.build_output_stream(&self.current_config.config(), sample_output, null_error_callback),
+            cpal::SampleFormat::I16 => self.device.build_output_stream(&self.current_config.config(), sample_output, null_error_callback),
+            cpal::SampleFormat::U16 => self.device.build_output_stream(&self.current_config.config(), sample_output, null_error_callback),
+        };
+
+        let stream = match stream_result {
+            Ok(stream) => stream,
+            Err(err) => {
+                let msg = format!("Failed to create a cpal output stream: {}", err);
+                return Err(AudioOutputError::new(&msg));
+            }
+        };
+
+        self.stream = stream;
+
+        Ok(())
+    }
+
+    pub fn play(&mut self) -> AudioOutputResult<()> {
+        if let Err(err) = self.stream.play() {
+            let msg = format!("Failed to begin stream playback: {}", err);
+            return Err(AudioOutputError::new(&msg));
+        }
+        self.playing = true;
+        Ok(())
     }
 }
 
