@@ -28,6 +28,22 @@ impl Output {
         }
     }
 
+    pub fn set_output_callback<
+        T: cpal::Sample,
+        D: FnMut(&mut [T], &cpal::OutputCallbackInfo) + Send + 'static
+    >(&mut self, sample_output_callback: D) -> AudioOutputResult<()> {
+        if let Some(cpal_out) = &mut self.cpal_out {
+            if let Err(err) = cpal_out.set_sample_output(sample_output_callback) {
+                let msg = format!("Failed to set output callback: {}", err);
+                return Err(AudioOutputError::new(&msg))
+            }
+            return Ok(())
+        }
+        else {
+            return Err(AudioOutputError::new("No Cpal output"))
+        }
+    }
+
     pub fn get_cpal(&self) -> &Option<CpalAudioOutput> {
         &self.cpal_out
     }

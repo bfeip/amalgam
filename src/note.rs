@@ -1,22 +1,20 @@
-use crate::prelude::*;
-
-pub const FREQ_A:       Float = 440.00; // A4
-pub const FREQ_A_SHARP: Float = 466.16;
-pub const FREQ_B_FLAT:  Float = 466.16;
-pub const FREQ_B:       Float = 493.88;
-pub const FREQ_C:       Float = 523.25; // C5
-pub const FREQ_C_SHARP: Float = 554.37;
-pub const FREQ_D_FLAT:  Float = 554.37;
-pub const FREQ_D:       Float = 587.33;
-pub const FREQ_D_SHARP: Float = 622.25;
-pub const FREQ_E_FLAT:  Float = 622.25;
-pub const FREQ_E:       Float = 659.25;
-pub const FREQ_F:       Float = 698.46;
-pub const FREQ_F_SHARP: Float = 739.99;
-pub const FREQ_G_FLAT:  Float = 739.99;
-pub const FREQ_G:       Float = 783.99;
-pub const FREQ_G_SHARP: Float = 830.61;
-pub const FREQ_A_FLAT:  Float = 830.61;
+pub const FREQ_A:       f32 = 440.00; // A4
+pub const FREQ_A_SHARP: f32 = 466.16;
+pub const FREQ_B_FLAT:  f32 = 466.16;
+pub const FREQ_B:       f32 = 493.88;
+pub const FREQ_C:       f32 = 523.25; // C5
+pub const FREQ_C_SHARP: f32 = 554.37;
+pub const FREQ_D_FLAT:  f32 = 554.37;
+pub const FREQ_D:       f32 = 587.33;
+pub const FREQ_D_SHARP: f32 = 622.25;
+pub const FREQ_E_FLAT:  f32 = 622.25;
+pub const FREQ_E:       f32 = 659.25;
+pub const FREQ_F:       f32 = 698.46;
+pub const FREQ_F_SHARP: f32 = 739.99;
+pub const FREQ_G_FLAT:  f32 = 739.99;
+pub const FREQ_G:       f32 = 783.99;
+pub const FREQ_G_SHARP: f32 = 830.61;
+pub const FREQ_A_FLAT:  f32 = 830.61;
 
 #[derive(Clone, Copy, PartialEq, PartialOrd)]
 pub enum Note {
@@ -39,7 +37,7 @@ pub enum Note {
     AFlat
 }
 
-pub fn note_to_freq(note: Note, octave: Unsigned) -> Float {
+pub fn note_to_freq(note: Note, octave: u8) -> f32 {
     let default_freq = match note {
         Note::A      => FREQ_A,
         Note::ASharp => FREQ_A_SHARP,
@@ -64,7 +62,7 @@ pub fn note_to_freq(note: Note, octave: Unsigned) -> Float {
     let octave_shift = octave - default_octave;
 
     // E.g. A4 shifted down one octave is 440 * (2^-1) 
-    let freq_shift_degree = (2 as Unsigned).pow(octave_shift);
-    let freq = default_freq * freq_shift_degree as Float;
+    let freq_shift_degree = (2 as u8).pow(octave_shift as u32);
+    let freq = default_freq * freq_shift_degree as f32;
     freq
 }

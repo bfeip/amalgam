@@ -14,6 +14,16 @@ pub struct CpalAudioOutput {
     playing: bool
 }
 
+#[derive(Debug)]
+pub struct CpalInfo {
+    device_name: String,
+    sample_rate: u32,
+    sample_format: cpal::SampleFormat,
+    channels: u16,
+    buffer_size: cpal::SupportedBufferSize,
+    playing: bool
+}
+
 impl CpalAudioOutput {
     pub fn new() -> AudioOutputResult<Self> {
         // Setup the host and device
@@ -81,20 +91,15 @@ impl CpalAudioOutput {
         self.current_config.sample_format()
     }
 
-    pub fn get_sample_rate(&self) {
-        self.current_config.sample_rate();
+    pub fn get_sample_rate(&self) -> cpal::SampleRate {
+        self.current_config.sample_rate()
     }
 
     pub fn set_sample_output<
         T: cpal::Sample,
         D: FnMut(&mut [T], &cpal::OutputCallbackInfo) + Send + 'static
     > (&mut self, sample_output: D) -> AudioOutputResult<()> {
-        let sample_format = self.get_sample_format();
-        let stream_result = match sample_format {
-            cpal::SampleFormat::F32 => self.device.build_output_stream(&self.current_config.config(), sample_output, null_error_callback),
-            cpal::SampleFormat::I16 => self.device.build_output_stream(&self.current_config.config(), sample_output, null_error_callback),
-            cpal::SampleFormat::U16 => self.device.build_output_stream(&self.current_config.config(), sample_output, null_error_callback),
-        };
+        let stream_result = self.device.build_output_stream(&self.current_config.config(), sample_output, print_error_callback);
 
         let stream = match stream_result {
             Ok(stream) => stream,
@@ -117,6 +122,27 @@ impl CpalAudioOutput {
         self.playing = true;
         Ok(())
     }
+
+    pub fn get_info(&self) -> CpalInfo {
+        let device_name = match self.device.name() {
+            Ok(device_name) => device_name,
+            Err(_err) => "Failed to get device name".to_string()
+        };
+        let sample_rate = self.get_sample_rate().0;
+        let sample_format = self.get_sample_format();
+        let channels = self.current_config.channels();
+        let buffer_size = self.current_config.buffer_size().clone();
+        let playing = self.playing;
+
+        CpalInfo {
+            device_name,
+            sample_rate,
+            sample_format,
+            channels,
+            buffer_size,
+            playing
+        }
+    }
 }
 
 fn null_stream_callback<T: cpal::Sample>(data: &mut [T], _: &cpal::OutputCallbackInfo) {
@@ -127,4 +153,8 @@ fn null_stream_callback<T: cpal::Sample>(data: &mut [T], _: &cpal::OutputCallbac
 
 fn null_error_callback(_err: cpal::StreamError) {
 
+}
+
+fn print_error_callback(err: cpal::StreamError) {
+    println!("CPAL ERROR: {}", err)
 }
