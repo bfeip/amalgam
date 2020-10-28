@@ -1,3 +1,4 @@
+/// Top level error returned by `main` and other high level functions
 #[derive(Debug)]
 pub struct SynthError {
     msg: String

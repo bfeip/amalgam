@@ -6,6 +6,7 @@ use cpal::traits::StreamTrait;
 
 use super::error::{AudioOutputError, AudioOutputResult};
 
+/// Structure representing a stream to Cpal. Houses all the info required to output audio
 pub struct CpalAudioOutput {
     host: cpal::Host,
     device: cpal::Device,
@@ -14,6 +15,7 @@ pub struct CpalAudioOutput {
     playing: bool
 }
 
+/// Structure containing a bunch of info about a `CpalAudioOutput`. Mostly for debugging
 #[derive(Debug)]
 pub struct CpalInfo {
     device_name: String,
@@ -25,6 +27,9 @@ pub struct CpalInfo {
 }
 
 impl CpalAudioOutput {
+    /// Creates a new `CpalAudioOutput` with default settings. Device and config info are provided by the system.
+    /// The default stream callback does nothing so playing this in the default state will do nothing. A stream callback
+    /// has to be set before we can output anything interesting.
     pub fn new() -> AudioOutputResult<Self> {
         // Setup the host and device
         let host = cpal::default_host();
@@ -39,7 +44,7 @@ impl CpalAudioOutput {
             Err(err) => {
                 let device_name = device.name();
                 if device_name.is_err() {
-                    let msg = format!("Not only could we not query the config for this device. We also couldn't get the device name: {}", err); 
+                    let msg = format!("Not only could we not query the configs for this device. We also couldn't get the device name: {}", err); 
                     return Err(AudioOutputError::new(&msg));
                 }
                 let device_name = device_name.unwrap(); // shadow
@@ -68,9 +73,9 @@ impl CpalAudioOutput {
         // Start setting up the output stream
         let sample_format = current_config.sample_format();
         let stream_result = match sample_format {
-            cpal::SampleFormat::F32 => device.build_output_stream(&current_config.config(), null_stream_callback::<f32>, null_error_callback),
-            cpal::SampleFormat::I16 => device.build_output_stream(&current_config.config(), null_stream_callback::<i16>, null_error_callback),
-            cpal::SampleFormat::U16 => device.build_output_stream(&current_config.config(), null_stream_callback::<u16>, null_error_callback),
+            cpal::SampleFormat::F32 => device.build_output_stream(&current_config.config(), null_stream_callback::<f32>, print_error_callback),
+            cpal::SampleFormat::I16 => device.build_output_stream(&current_config.config(), null_stream_callback::<i16>, print_error_callback),
+            cpal::SampleFormat::U16 => device.build_output_stream(&current_config.config(), null_stream_callback::<u16>, print_error_callback),
         };
 
         let stream = match stream_result {
@@ -87,15 +92,19 @@ impl CpalAudioOutput {
         })
     }
 
+    /// Gets the format the samples are in i.e. u16, i16, or f32. See `cpal::SampleFormat` for more details.
     pub fn get_sample_format(&self) -> cpal::SampleFormat {
         self.current_config.sample_format()
     }
 
+    /// Gets the sample rate of the current config
     pub fn get_sample_rate(&self) -> cpal::SampleRate {
         self.current_config.sample_rate()
     }
 
-    pub fn set_sample_output<
+    /// Sets the callback that will be called upon to fill the samples provided by Cpal. The callback you provide should
+    /// fill the samples in `data` with the audio you want to output. 
+    pub fn set_stream_callback<
         T: cpal::Sample,
         D: FnMut(&mut [T], &cpal::OutputCallbackInfo) + Send + 'static
     > (&mut self, sample_output: D) -> AudioOutputResult<()> {
@@ -114,6 +123,7 @@ impl CpalAudioOutput {
         Ok(())
     }
 
+    /// Starts playing the audio stream
     pub fn play(&mut self) -> AudioOutputResult<()> {
         if let Err(err) = self.stream.play() {
             let msg = format!("Failed to begin stream playback: {}", err);
@@ -123,6 +133,7 @@ impl CpalAudioOutput {
         Ok(())
     }
 
+    /// Gets a bunch of info about this struct and puts it into an easily printable `CpalInfo`
     pub fn get_info(&self) -> CpalInfo {
         let device_name = match self.device.name() {
             Ok(device_name) => device_name,
@@ -145,16 +156,19 @@ impl CpalAudioOutput {
     }
 }
 
+/// The default stream callback. Does nothing but write 0s to the audio stream
 fn null_stream_callback<T: cpal::Sample>(data: &mut [T], _: &cpal::OutputCallbackInfo) {
     for sample in data.iter_mut() {
         *sample = cpal::Sample::from(&0.0);
     }
 }
 
+/// A stream error callback that does nothing
 fn null_error_callback(_err: cpal::StreamError) {
 
 }
 
+/// A stream error callback that simply prints the error it gets passed
 fn print_error_callback(err: cpal::StreamError) {
     println!("CPAL ERROR: {}", err)
 }

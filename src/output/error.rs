@@ -1,3 +1,4 @@
+/// The error type used for audio output issues
 #[derive(Debug)]
 pub struct AudioOutputError {
     msg: String

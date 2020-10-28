@@ -16,6 +16,7 @@ pub const FREQ_G:       f32 = 783.99;
 pub const FREQ_G_SHARP: f32 = 830.61;
 pub const FREQ_A_FLAT:  f32 = 830.61;
 
+/// Represents the notes within an octave
 #[derive(Clone, Copy, PartialEq, PartialOrd)]
 pub enum Note {
     A,
@@ -37,6 +38,7 @@ pub enum Note {
     AFlat
 }
 
+/// Given a note and an octave this function will return a frequency
 pub fn note_to_freq(note: Note, octave: u8) -> f32 {
     let default_freq = match note {
         Note::A      => FREQ_A,
@@ -62,7 +64,7 @@ pub fn note_to_freq(note: Note, octave: u8) -> f32 {
     let octave_shift = octave - default_octave;
 
     // E.g. A4 shifted down one octave is 440 * (2^-1) 
-    let freq_shift_degree = (2 as u8).pow(octave_shift as u32);
+    let freq_shift_degree = 2_u8.pow(octave_shift as u32);
     let freq = default_freq * freq_shift_degree as f32;
     freq
 }
