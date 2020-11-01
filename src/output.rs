@@ -11,11 +11,11 @@ pub enum OutputDeviceType {
 
 /// A structure representing what would be an output module on a modular synth. Currently it just wraps the `CpalAudioOutput`.
 /// Somewhat useless. I'm not sure if it'll ne sticking around
-pub struct Output {
+pub struct AudioOutput {
     cpal_out: Option<CpalAudioOutput>
 }
 
-impl Output {
+impl AudioOutput {
     /// Creates a new `Output` and initializes an audio output device based upon the provided
     /// `output_device_type`
     pub fn new(output_device_type: OutputDeviceType) -> AudioOutputResult<Self> {
@@ -28,7 +28,7 @@ impl Output {
                         return Err(AudioOutputError::new(&msg));
                     }
                 };
-                Ok(Output{ cpal_out })
+                Ok(AudioOutput{ cpal_out })
             }
         }
     }

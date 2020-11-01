@@ -3,14 +3,14 @@
 extern crate cpal;
 
 mod error;
-mod oscillator;
 mod prelude;
 mod note;
 mod clock;
-mod noise;
+mod modules;
 mod output;
 
 use crate::error::{SynthError, SynthResult};
+use crate::modules::{noise, oscillator};
 
 /// Represents a type of audio test to be preformed
 enum TestOutputType {
@@ -25,7 +25,7 @@ fn test_output(test_output_type: TestOutputType) -> SynthResult<()> {
     // create an output with cpal as the backend. I'm not planning on adding any other backends right now
     // since cpal is nice and low level so the output struct is a useless abstraction that should be removed
     // in the future
-    let output_result = output::Output::new(output::OutputDeviceType::Cpal);
+    let output_result = output::AudioOutput::new(output::OutputDeviceType::Cpal);
     let mut output = match output_result {
         Ok(output) => output,
         Err(err) => {
