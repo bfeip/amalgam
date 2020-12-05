@@ -2,7 +2,7 @@ mod error;
 mod cpal_audio_output;
 
 use error::{AudioOutputResult, AudioOutputError};
-use cpal_audio_output::CpalAudioOutput;
+use cpal_audio_output::{CpalAudioOutput, CpalInfo};
 
 /// Represents a kind of audio output device. Currently Cpal is the only supported type
 pub enum OutputDeviceType {
@@ -51,6 +51,27 @@ impl AudioOutput {
         }
     }
 
+    pub fn get_sample_format(&self) -> Option<cpal::SampleFormat> {
+        match &self.cpal_out {
+            Some(cpal_out) => Some(cpal_out.get_sample_format()),
+            None => None
+        }
+    }
+
+    pub fn get_sample_rate(&self) -> Option<cpal::SampleRate> {
+        match &self.cpal_out {
+            Some(cpal_out) => Some(cpal_out.get_sample_rate()),
+            None => None
+        }
+    }
+
+    pub fn get_cpal_info(&self) -> Option<CpalInfo> {
+        match &self.cpal_out {
+            Some(cpal_out) => Some(cpal_out.get_info()),
+            None => None
+        }
+    }
+
     /// Gets a reference to the Cpal output if there is one
     pub fn get_cpal(&self) -> &Option<CpalAudioOutput> {
         &self.cpal_out
@@ -59,5 +80,12 @@ impl AudioOutput {
     /// Gets a mutable reference to the Cpal output if there is one
     pub fn get_cpal_mut(&mut self) -> &mut Option<CpalAudioOutput> {
         &mut self.cpal_out
+    }
+
+    pub fn play(&mut self) -> AudioOutputResult<()> {
+        match self.get_cpal_mut() {
+            Some(cpal_out) => cpal_out.play(),
+            None => Err(AudioOutputError::new("Failed to play stream because there's no cpal output"))
+        }
     }
 }

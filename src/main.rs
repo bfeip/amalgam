@@ -6,81 +6,38 @@ mod error;
 mod prelude;
 mod note;
 mod clock;
-mod modules;
+mod module;
 mod output;
+mod synth;
 
 use crate::error::{SynthError, SynthResult};
-use crate::modules::{noise, oscillator};
-
-/// Represents a type of audio test to be preformed
-enum TestOutputType {
-    /// Test should output white noise
-    Noise,
-    /// Test should output a sine wave
-    Sine
-}
+use crate::module::{oscillator};
 
 /// Outputs a second of audio who's source depends on the `test_output_type` you provided
-fn test_output(test_output_type: TestOutputType) -> SynthResult<()> {
-    // create an output with cpal as the backend. I'm not planning on adding any other backends right now
-    // since cpal is nice and low level so the output struct is a useless abstraction that should be removed
-    // in the future
-    let output_result = output::AudioOutput::new(output::OutputDeviceType::Cpal);
-    let mut output = match output_result {
-        Ok(output) => output,
+fn test_output() -> SynthResult<()> {
+    let mut synth = match synth::Synth::new() {
+        Ok(synth) => synth,
         Err(err) => {
-            let msg = format!("Failed to create output: {}", err);
+            let msg = format!("Failed to test full synth: {}", err);
             return Err(SynthError::new(&msg));
         }
     };
 
-    // Get the cpal output. We'll just interact with it directly instead of writing methods in the  (mostly useless)
-    // `Output` struct
-    let cpal_output = match output.get_cpal_mut() {
-        Some(cpal_output) => cpal_output,
-        None => {
-            return Err(SynthError::new("Failed to get CPAL output"));
+    let mut audio_output = match output::AudioOutput::new(output::OutputDeviceType::Cpal) {
+        Ok(audio_output) => audio_output,
+        Err(err) => {
+            let msg = format!("Failed to test output: failed to create audio output: {}", err);
+            return Err(SynthError::new(&msg));
         }
     };
+    let sample_rate = audio_output.get_sample_rate().unwrap();
 
-    // TODO: This is just a test function so it's not a big deal right now but this is very verbose
-    match test_output_type {
-        TestOutputType::Noise => {
-            let sample_format = cpal_output.get_sample_format();
-            let sample_output_result = match sample_format {
-                cpal::SampleFormat::F32 => cpal_output.set_stream_callback(noise::cpal_output_noise::<f32>),
-                cpal::SampleFormat::I16 => cpal_output.set_stream_callback(noise::cpal_output_noise::<i16>),
-                cpal::SampleFormat::U16 => cpal_output.set_stream_callback(noise::cpal_output_noise::<u16>)
-            };
-            if let Err(err) = sample_output_result {
-                let msg = format!("Failed to set noise output stream: {}", err);
-                return Err(SynthError::new(&msg));
-            }
-        }
-
-        TestOutputType::Sine => {
-            let sample_format = cpal_output.get_sample_format();
-            let sample_output_result = match sample_format {
-                cpal::SampleFormat::F32 => cpal_output.set_stream_callback(oscillator::cpal_output_sine::<f32>),
-                cpal::SampleFormat::I16 => cpal_output.set_stream_callback(oscillator::cpal_output_sine::<i16>),
-                cpal::SampleFormat::U16 => cpal_output.set_stream_callback(oscillator::cpal_output_sine::<u16>)
-            };
-            if let Err(err) = sample_output_result {
-                let msg = format!("Failed to set noise output stream: {}", err);
-                return Err(SynthError::new(&msg));
-            }
-        }
-    }
-
-    // Begin playing the audio
-    if let Err(err) = cpal_output.play() {
-        let msg = format!("Failed to play output stream: {}", err);
+    let oscillator = Box::new(oscillator::Oscillator::new(sample_rate.0 as f32));
+    synth.get_output_module_mut().set_audio_input(oscillator);
+    if let Err(err) = synth.play(&mut audio_output) {
+        let msg = format!("Failed to test full synth: {}", err);
         return Err(SynthError::new(&msg));
     }
-
-    // Print cpal debug info
-    let cpal_info = cpal_output.get_info();
-    println!("Cpal info: {:?}", cpal_info);
 
     // The audio is being played on a separate thread owned by cpal if I understand correctly
     // so we need to sleep here to give it enough time to play a bit
@@ -90,5 +47,5 @@ fn test_output(test_output_type: TestOutputType) -> SynthResult<()> {
 }
 
 fn main() -> SynthResult<()> {
-    test_output(TestOutputType::Sine)
+    test_output()
 }
