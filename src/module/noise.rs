@@ -10,9 +10,11 @@ impl NoiseGenerator {
         NoiseGenerator {}
     }
 
+    // NOTE: This needs to be in the range of -1.0 to 1.0, so this is wrong
     fn get<T>(&mut self) -> T 
     where rand::distributions::Standard: rand::distributions::Distribution<T> {
-        rand::random()
+        todo!();
+        //rand::random()
     }
 }
 
