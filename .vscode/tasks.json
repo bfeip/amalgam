@@ -7,11 +7,20 @@
 			"problemMatcher": [
 				"$rustc"
 			],
+			"group": "build",
+			"label": "Rust: cargo build - synth"
+		},
+		{
+			"type": "cargo",
+			"subcommand": "test",
+			"problemMatcher": [
+				"$rustc"
+			],
 			"group": {
 				"kind": "build",
 				"isDefault": true
 			},
-			"label": "Rust: cargo build - synth"
+			"label": "Rust: cargo test - synth"
 		}
 	]
 }

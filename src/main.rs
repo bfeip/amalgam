@@ -3,7 +3,9 @@
 extern crate cpal;
 
 mod error;
+mod util;
 mod prelude;
+
 mod note;
 mod clock;
 mod module;
