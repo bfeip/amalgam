@@ -82,7 +82,6 @@ impl Sequencer {
         self.steps.get(step_index)
     }
 
-
     pub fn get_step_info_mut(&mut self, step_index: usize) -> Option<&mut StepInfo> {
         self.steps.get_mut(step_index)
     }
