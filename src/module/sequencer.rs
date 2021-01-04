@@ -1,4 +1,5 @@
 use super::traits::SignalOutputModule;
+use super::common::EdgeDetection;
 use super::error::*;
 use super::empty::Empty;
 
@@ -16,13 +17,6 @@ pub enum SequencerStepKind {
 }
 
 #[derive(Copy, Clone)]
-pub enum SequencerEdgeDetection {
-    Rising,
-    Falling,
-    Both
-}
-
-#[derive(Copy, Clone)]
 pub struct StepInfo {
     pub kind: SequencerStepKind,
     pub value: f32,
@@ -37,7 +31,7 @@ pub struct Sequencer {
     current_step: usize,
 
     clock: Box<dyn SignalOutputModule>,
-    edge_detection: SequencerEdgeDetection,
+    edge_detection: EdgeDetection,
     edge_tolerance: f32
 }
 
@@ -49,7 +43,7 @@ impl Sequencer {
         let current_step = 0_usize;
 
         let clock = Box::new(Empty::new());
-        let edge_detection = SequencerEdgeDetection::Falling;
+        let edge_detection = EdgeDetection::Falling;
         let edge_tolerance = 0.8_f32;
         Self { steps, playing, cycle, current_step, clock, edge_detection, edge_tolerance }
     }
@@ -65,7 +59,7 @@ impl Sequencer {
         let current_step = 0_usize;
 
         let clock = Box::new(Empty::new());
-        let edge_detection = SequencerEdgeDetection::Falling;
+        let edge_detection = EdgeDetection::Falling;
         let edge_tolerance = 0.8_f32;
         Self { steps, playing, cycle, current_step, clock, edge_detection, edge_tolerance }
     }
@@ -178,11 +172,11 @@ impl Sequencer {
         self.clock = clock;
     }
 
-    pub fn set_edge_detection(&mut self, edge_detection: SequencerEdgeDetection) {
+    pub fn set_edge_detection(&mut self, edge_detection: EdgeDetection) {
         self.edge_detection = edge_detection;
     }
 
-    pub fn get_edge_detection(&self) -> SequencerEdgeDetection {
+    pub fn get_edge_detection(&self) -> EdgeDetection {
         self.edge_detection
     }
 
@@ -245,11 +239,11 @@ impl SignalOutputModule for Sequencer {
                 let previous_clock_signal = clock_signals[i - 1];
                 let current_clock_signal = clock_signals[i];
                 let needs_step = match self.edge_detection {
-                    SequencerEdgeDetection::Both => 
+                    EdgeDetection::Both => 
                         f32::abs(previous_clock_signal - current_clock_signal) > self.edge_tolerance,
-                    SequencerEdgeDetection::Falling => 
+                    EdgeDetection::Falling => 
                         current_clock_signal < previous_clock_signal - self.edge_tolerance,
-                    SequencerEdgeDetection::Rising =>
+                    EdgeDetection::Rising =>
                         current_clock_signal > previous_clock_signal + self.edge_tolerance
                 };
                 if needs_step {
@@ -362,7 +356,7 @@ mod tests {
         // Test output when not playing
         let mut data = Vec::with_capacity(SAMPLE_RATE);
         data.resize(SAMPLE_RATE, 0_f32);
-        sequencer.set_edge_detection(SequencerEdgeDetection::Both);
+        sequencer.set_edge_detection(EdgeDetection::Both);
         sequencer.start();
 
         sequencer.fill_output_buffer(&mut data);
@@ -383,7 +377,7 @@ mod tests {
         // Test output when not playing
         let mut data = Vec::with_capacity(SAMPLE_RATE);
         data.resize(SAMPLE_RATE, 0_f32);
-        sequencer.set_edge_detection(SequencerEdgeDetection::Both);
+        sequencer.set_edge_detection(EdgeDetection::Both);
         sequencer.start();
 
         let step_1 = sequencer.get_step_info_mut(1).expect("There is no step 1?");
@@ -407,7 +401,7 @@ mod tests {
         // Test output when not playing
         let mut data = Vec::with_capacity(SAMPLE_RATE);
         data.resize(SAMPLE_RATE, 0_f32);
-        sequencer.set_edge_detection(SequencerEdgeDetection::Both);
+        sequencer.set_edge_detection(EdgeDetection::Both);
         sequencer.start();
 
         let step_1 = sequencer.get_step_info_mut(1).expect("There is no step 1?");
@@ -431,7 +425,7 @@ mod tests {
         // Test output when not playing
         let mut data = Vec::with_capacity(SAMPLE_RATE);
         data.resize(SAMPLE_RATE, 0_f32);
-        sequencer.set_edge_detection(SequencerEdgeDetection::Both);
+        sequencer.set_edge_detection(EdgeDetection::Both);
         sequencer.start();
 
         let step_1 = sequencer.get_step_info_mut(1).expect("There is no step 1?");
@@ -459,7 +453,7 @@ mod tests {
         // Test output when not playing
         let mut data = Vec::with_capacity(SAMPLE_RATE);
         data.resize(SAMPLE_RATE, 0_f32);
-        sequencer.set_edge_detection(SequencerEdgeDetection::Both);
+        sequencer.set_edge_detection(EdgeDetection::Both);
         sequencer.start();
 
         for step in sequencer.iter_mut() {
