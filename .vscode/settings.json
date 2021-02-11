@@ -1,6 +1,13 @@
 {
     "cSpell.words": [
+        "Footswitch",
+        "Smpte",
         "cpal",
+        "repr",
+        "thrity",
         "untrigger"
+    ],
+    "editor.rulers": [
+        120
     ]
 }

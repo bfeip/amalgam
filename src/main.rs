@@ -6,6 +6,7 @@ mod error;
 mod util;
 mod prelude;
 
+mod midi;
 mod note;
 mod clock;
 mod module;
