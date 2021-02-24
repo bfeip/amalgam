@@ -2,7 +2,6 @@
 // https://web.archive.org/web/20141227205754/http://www.sonicspot.com:80/guide/midifiles.html
 
 use std::io;
-use std::io::prelude::*;
 use std::fs::File;
 
 #[derive(Debug)]
@@ -30,6 +29,12 @@ pub type MidiResult<T> = Result<T, MidiError>;
 struct MidiData {
     header: HeaderChunk,
     tracks: Vec<TrackChunk>
+}
+
+impl MidiData {
+    fn new(header: HeaderChunk, tracks: Vec<TrackChunk>) -> Self {
+        Self { header, tracks }
+    }
 }
 
 enum TimeDivision {
@@ -71,7 +76,11 @@ impl HeaderChunk {
         let time_division_u16 = u16::from_be_bytes(time_division_bytes);
         let time_division = match time_division_u16 & 0x8000 {
             0x8000 => TimeDivision::FramesPerSecond(time_division_u16 & !0x8000),
-            0x0000 => TimeDivision::TicksPerBeat(time_division_u16)
+            0x0000 => TimeDivision::TicksPerBeat(time_division_u16),
+            _ => {
+                let msg = format!("Unknown time division {:#06x}", time_division_u16);
+                return Err(MidiError::new(&msg));
+            }
         };
 
         Ok(HeaderChunk { format, n_tracks, time_division })
@@ -100,8 +109,8 @@ enum MidiEventType {
 }
 
 impl MidiEventType {
-    fn from_nybble(nybble: u8) -> Self {
-        match nybble & 0xF {
+    fn from_nybble(nybble: u8) -> MidiResult<Self> {
+        let event_type = match nybble & 0xF {
             0x8 => MidiEventType::NoteOff,
             0x9 => MidiEventType::NoteOn,
             0xA => MidiEventType::NoteAftertouch,
@@ -109,8 +118,13 @@ impl MidiEventType {
             0xC => MidiEventType::ProgramChange,
             0xD => MidiEventType::ChannelAftertouch,
             0xE => MidiEventType::PitchBend,
-            0xF => MidiEventType::MetaOrSystem
-        }
+            0xF => MidiEventType::MetaOrSystem,
+            _   => {
+                let msg = format!("Unknown MIDI event type {:#03x}", nybble);
+                return Err(MidiError::new(&msg))
+            }
+        };
+        Ok(event_type)
     }
 }
 
@@ -131,7 +145,7 @@ impl MidiChannelEvent {
 enum MidiEvent {
     Channel(MidiChannelEvent),
     Meta(MidiMetaEvent),
-    System
+    System(MidiSystemEvent)
 }
 
 enum MidiControllerEvent {
@@ -229,8 +243,8 @@ enum MidiMetaEventType {
 }
 
 impl MidiMetaEventType {
-    fn from_byte(byte: u8) -> Self {
-        match byte {
+    fn from_byte(byte: u8) -> MidiResult<Self> {
+        let event_type = match byte {
             0x00 => MidiMetaEventType::SequenceNumber,
             0x01 => MidiMetaEventType::TextEvent,
             0x02 => MidiMetaEventType::CopyrightNotice,
@@ -246,7 +260,12 @@ impl MidiMetaEventType {
             0x58 => MidiMetaEventType::TimeSignature,
             0x59 => MidiMetaEventType::KeySignature,
             0x7F => MidiMetaEventType::SequencerSpecific,
-        }
+            _ => {
+                let msg = format!("Unknown MIDI event type {:#04x}", byte);
+                return Err(MidiError::new(&msg));
+            }
+        };
+        Ok(event_type)
     }
 }
 
@@ -275,49 +294,57 @@ enum MidiSystemEvent {
 }
 
 macro_rules! read_with_eof_check {
-    ($midiFileStream:ident, $buffer:ident) => {
-        if let Err(err) = $midiFileStream.read_exact(&mut $buffer) {
-            throw_unexpected_eof(err);
+    ($midiFileStream:expr, $buffer:expr) => {
+        if let Err(err) = $midiFileStream.read_exact($buffer) {
+            let msg = format!("Unexpected EOF: {}", err);
+            return Err(MidiError::new(&msg));
         }
     };
 }
 
-fn parse_midi(midiPath: &str) -> MidiResult<MidiData> {
-    let midiFile = match File::open(midiPath) {
-        Ok(midiFile) => midiFile,
+fn parse_midi(midi_path: &str) -> MidiResult<MidiData> {
+    let midi_file = match File::open(midi_path) {
+        Ok(midi_file) => midi_file,
         Err(err) => {
-            let msg = format!("Failed to open MIDI file at {} for reading: {}", midiPath, err);
+            let msg = format!("Failed to open MIDI file at {} for reading: {}", midi_path, err);
             return Err(MidiError::new(&msg));
         }
     };
-    let mut midiFileStream = io::BufReader::new(midiFile);
+    let mut midi_file_stream = io::BufReader::new(midi_file);
 
-    let header = match parse_header_chunk(&mut midiFileStream) {
+    let header = match parse_header_chunk(&mut midi_file_stream) {
         Ok(header) => header,
         Err(err) => {
             let msg = format!("Failed to parse MIDI header: {}", err);
             return Err(MidiError::new(&msg));
         }
     };
-    let tracks = Vec::with_capacity(header.n_tracks);
-    for _ in header.n_tracks {
-        let track = parse_track(&mut midiFileStream);
+    let mut tracks = Vec::with_capacity(header.n_tracks);
+    for _ in 0..header.n_tracks {
+        let track = match parse_track_chunk(&mut midi_file_stream) {
+            Ok(track) => track,
+            Err(err) => {
+                let msg = format!("Failed to parse MIDI track: {}", err);
+                return Err(MidiError::new(&msg));
+            }
+        };
         tracks.push(track);
     }
+    Ok(MidiData::new(header, tracks))
 }
 
-fn parse_header_chunk<T: io::Read>(midiFileStream: &mut T) -> MidiResult<HeaderChunk> {
+fn parse_header_chunk<T: io::Read>(midi_file_stream: &mut T) -> MidiResult<HeaderChunk> {
     const EXPECTED_ID: &[u8] = "MThd".as_bytes();
     const EXPECTED_SIZE: u32 = 6;
 
-    let mut id: [u8; 4];
-    let mut size: [u8; 4];
-    let mut format: [u8; 2];
-    let mut n_tracks: [u8; 2];
-    let mut time_division: [u8; 2];
+    let mut id: [u8; 4] = [0; 4];
+    let mut size: [u8; 4] = [0; 4];
+    let mut format: [u8; 2] = [0; 2];
+    let mut n_tracks: [u8; 2] = [0; 2];
+    let mut time_division: [u8; 2] = [0; 2];
 
     // We only need to check that the ID is what we expected... It's useless after that
-    read_with_eof_check!(midiFileStream, id);
+    read_with_eof_check!(midi_file_stream, &mut id);
     if !id.iter().eq(EXPECTED_ID.iter()) {
         let expected_id_str = std::str::from_utf8(EXPECTED_ID).expect("EXPECTED_ID was not valid UTF-8 somehow");
         let id_str = match std::str::from_utf8(&id) {
@@ -325,38 +352,39 @@ fn parse_header_chunk<T: io::Read>(midiFileStream: &mut T) -> MidiResult<HeaderC
             Err(err) => {
                 let id_value = u32::from_be_bytes(id);
                 let msg = format!(
-                    "Expected main header ID to be {}. Got an invalid UTF-8 with value {:#010x}",
-                    expected_id_str, id_value
+                    "Expected main header ID to be {}. Got an invalid UTF-8 with value {:#010x}: {}",
+                    expected_id_str, id_value, err
                 );
                 return Err(MidiError::new(&msg));
             }
         };
         let msg = format!("Expected main header ID to be {} got {}", expected_id_str, id_str);
+        return Err(MidiError::new(&msg))
     }
 
     // The size of the main header should always be 6... Just check that it is and carry on
-    read_with_eof_check!(midiFileStream, size);
+    read_with_eof_check!(midi_file_stream, &mut size);
     let size_u32 = u32::from_be_bytes(size);
     if size_u32 != EXPECTED_SIZE {
         let msg = format!("Expected main header size to be {}. Got {}", EXPECTED_SIZE, size_u32);
         return Err(MidiError::new(&msg)); 
     }
 
-    read_with_eof_check!(midiFileStream, format);
-    read_with_eof_check!(midiFileStream, n_tracks);
-    read_with_eof_check!(midiFileStream, time_division);
+    read_with_eof_check!(midi_file_stream, &mut format);
+    read_with_eof_check!(midi_file_stream, &mut n_tracks);
+    read_with_eof_check!(midi_file_stream, &mut time_division);
 
     HeaderChunk::from_bytes(format, n_tracks, time_division)
 }
 
-fn parse_track_chunk<T: io::Read + io::Seek>(midiFileStream: &mut T) -> MidiResult<TrackChunk> {
+fn parse_track_chunk<T: io::Read + io::Seek>(midi_file_stream: &mut T) -> MidiResult<TrackChunk> {
     const EXPECTED_ID: &[u8] = "MTrk".as_bytes();
     
-    let mut id_bytes: [u8; 4];
-    let mut size_bytes: [u8; 4];
+    let mut id_bytes: [u8; 4] = [0; 4];
+    let mut size_bytes: [u8; 4]= [0; 4];
 
     // We only need to check that the ID is what we expected... It's useless after that
-    read_with_eof_check!(midiFileStream, id_bytes);
+    read_with_eof_check!(midi_file_stream, &mut id_bytes);
     if !id_bytes.iter().eq(EXPECTED_ID.iter()) {
         let expected_id_str = std::str::from_utf8(EXPECTED_ID).expect("EXPECTED_ID was not valid UTF-8 somehow");
         let id_str = match std::str::from_utf8(&id_bytes) {
@@ -364,24 +392,26 @@ fn parse_track_chunk<T: io::Read + io::Seek>(midiFileStream: &mut T) -> MidiResu
             Err(err) => {
                 let id_value = u32::from_be_bytes(id_bytes);
                 let msg = format!(
-                    "Expected main header ID to be {}. Got an invalid UTF-8 with value {:#010x}",
-                    expected_id_str, id_value
+                    "Expected main header ID to be {}. Got an invalid UTF-8 with value {:#010x}: {}",
+                    expected_id_str, id_value, err
                 );
                 return Err(MidiError::new(&msg));
             }
         };
         let msg = format!("Expected main header ID to be {} got {}", expected_id_str, id_str);
+        return Err(MidiError::new(&msg));
     }
 
-    read_with_eof_check!(midiFileStream, size_bytes);
+    read_with_eof_check!(midi_file_stream, &mut size_bytes);
     let size = u32::from_be_bytes(size_bytes) as u64;
 
+    let divided_event_bytes: &mut Vec<u8> = &mut Vec::new();
     let mut events = Vec::new();
     const HERE: io::SeekFrom = io::SeekFrom::Current(0);
-    let start_stream_position = midiFileStream.seek(HERE).expect("Failed to get stream position");
-    while midiFileStream.seek(HERE).unwrap() - start_stream_position < size {
+    let start_stream_position = midi_file_stream.seek(HERE).expect("Failed to get stream position");
+    while midi_file_stream.seek(HERE).unwrap() - start_stream_position < size {
         // While we haven't met the size yet
-        let event = match parse_event(midiFileStream) {
+        let event = match parse_event(midi_file_stream, divided_event_bytes) {
             Ok(event) => event,
             Err(err) => {
                 let msg = format!("Failed to parse events: {}", err);
@@ -390,15 +420,15 @@ fn parse_track_chunk<T: io::Read + io::Seek>(midiFileStream: &mut T) -> MidiResu
         };
         events.push(event)
     }
-    if midiFileStream.seek(HERE).unwrap() > size {
+    if midi_file_stream.seek(HERE).unwrap() > size {
         let msg = "Read more than size of track";
         return Err(MidiError::new(msg));
     }
     Ok(TrackChunk::new(events))
 }
 
-fn parse_event<T: io::Read>(midiFileStream: &mut T) -> MidiResult<MidiEvent> {
-    let delta_time = match parse_variable_length(midiFileStream) {
+fn parse_event<T: io::Read>(midi_file_stream: &mut T, divided_event_bytes: &mut Vec<u8>) -> MidiResult<MidiEvent> {
+    let delta_time = match parse_variable_length(midi_file_stream) {
         Ok(delta_time) => delta_time,
         Err(err) => {
             let msg = format!("Failed to get delta-time for event: {}", err);
@@ -406,49 +436,71 @@ fn parse_event<T: io::Read>(midiFileStream: &mut T) -> MidiResult<MidiEvent> {
         }
     };
 
-    let mut event_type_and_channel_byte: [u8; 1];
-    read_with_eof_check!(midiFileStream, event_type_and_channel_byte); 
-    let event_type = MidiEventType::from_nybble(event_type_and_channel_byte[0] >> 4);
+    let mut event_type_and_channel_byte: [u8; 1] = [0; 1];
+    read_with_eof_check!(midi_file_stream, &mut event_type_and_channel_byte); 
+    let event_type = match MidiEventType::from_nybble(event_type_and_channel_byte[0] >> 4) {
+        Ok(event_type) => event_type,
+        Err(err) => {
+            let msg = format!("Failed to get event type from nybble: {}", err);
+            return Err(MidiError::new(&msg));
+        }
+    };
     let midi_channel = event_type_and_channel_byte[0] & 0xF;
 
     match event_type {
         MidiEventType::MetaOrSystem => {
-            parse_meta_or_system_event(midiFileStream, event_type_and_channel_byte[0])
+            parse_meta_or_system_event(midi_file_stream, event_type_and_channel_byte[0], divided_event_bytes)
         },
         _ => {
-            let mut param1: [u8; 1];
-            let mut param2: [u8; 1];
-            read_with_eof_check!(midiFileStream, param1);
-            read_with_eof_check!(midiFileStream, param2);
-            Ok(MidiEvent::Channel(MidiChannelEvent::new(delta_time, event_type, midi_channel, param1[0], param2[0])))
+            let mut param1: [u8; 1] = [0; 1];
+            let mut param2: [u8; 1] = [0; 1];
+            read_with_eof_check!(midi_file_stream, &mut param1);
+            read_with_eof_check!(midi_file_stream, &mut param2);
+            let channel_event = MidiChannelEvent::new(
+                delta_time, event_type, midi_channel, param1[0], param2[0]
+            );
+            Ok(MidiEvent::Channel(channel_event))
         }
     }
 }
 
 
 fn parse_meta_or_system_event<T: io::Read>(
-    midiFileStream: &mut T, event_type_and_channel_byte: u8
+    midi_file_stream: &mut T, event_type_and_channel_byte: u8, divided_event_bytes: &mut Vec<u8>
 ) -> MidiResult<MidiEvent> {
     match event_type_and_channel_byte {
         0xFF => {
-            let meta_event = match parse_meta_event(midiFileStream) {
-                Ok(meta_event) => meta_event,
+            match parse_meta_event(midi_file_stream) {
+                Ok(meta_event) => return Ok(MidiEvent::Meta(meta_event)),
                 Err(err) => {
                     let msg = format!("Failed to parse meta event: {}", err);
                     return Err(MidiError::new(&msg));
                 }
             };
-            Ok(MidiEvent::Meta(meta_event))
         },
-        0xF7 | 0xF0 => parse_system_event(midiFileStream)
+        0xF7 | 0xF0 => {
+            match parse_system_event(midi_file_stream, event_type_and_channel_byte, divided_event_bytes) {
+                Ok(system_event) => return Ok(MidiEvent::System(system_event)),
+                Err(err) => {
+                    let msg = format!("Failed to parse system event: {}", err);
+                    return Err(MidiError::new(&msg));
+                }
+            };
+        }
+        _ => {
+            let msg = format!(
+                "Tried to parse meta or system event but got unknown type byte {:#04x}", event_type_and_channel_byte
+            );
+            return Err(MidiError::new(&msg));
+        }
     }
 }
 
-fn parse_meta_event<T: io::Read>(midiFileStream: &mut T) -> MidiResult<MidiMetaEvent> {
-    let mut meta_event_type_byte: [u8; 1];
-    read_with_eof_check!(midiFileStream, meta_event_type_byte);
+fn parse_meta_event<T: io::Read>(midi_file_stream: &mut T) -> MidiResult<MidiMetaEvent> {
+    let mut meta_event_type_byte: [u8; 1] = [0; 1];
+    read_with_eof_check!(midi_file_stream, &mut meta_event_type_byte);
     
-    let size = match parse_variable_length(midiFileStream) {
+    let size = match parse_variable_length(midi_file_stream) {
         Ok(size) => size,
         Err(err) => {
             let msg = format!("Failed to parse MIDI meta event because we couldn't parse size: {}", err);
@@ -456,16 +508,22 @@ fn parse_meta_event<T: io::Read>(midiFileStream: &mut T) -> MidiResult<MidiMetaE
         }
     };
 
-    let meta_event_type = MidiMetaEventType::from_byte(meta_event_type_byte[0]);
+    let meta_event_type = match MidiMetaEventType::from_byte(meta_event_type_byte[0]) {
+        Ok(meta_event_type) => meta_event_type,
+        Err(err) => {
+            let msg = format!("Failed to get meta event type: {}", err);
+            return Err(MidiError::new(&msg));
+        }
+    };
     match meta_event_type {
-        SequenceNumber => {
-            let bytes: [u8; 2];
-            read_with_eof_check!(midiFileStream, bytes);
+        MidiMetaEventType::SequenceNumber => {
+            let mut bytes: [u8; 2] = [0; 2];
+            read_with_eof_check!(midi_file_stream, &mut bytes);
             Ok(MidiMetaEvent::SequenceNumber{ msb: bytes[0], lsb: bytes[1] })
         },
 
-        TextEvent => {
-            let text = match parse_string(midiFileStream, size) {
+        MidiMetaEventType::TextEvent => {
+            let text = match parse_string(midi_file_stream, size) {
                 Ok(text) => text,
                 Err(err) => {
                     let msg = format!(
@@ -477,8 +535,8 @@ fn parse_meta_event<T: io::Read>(midiFileStream: &mut T) -> MidiResult<MidiMetaE
             Ok(MidiMetaEvent::TextEvent{ text })
         },
 
-        CopyrightNotice => {
-            let text = match parse_string(midiFileStream, size) {
+        MidiMetaEventType::CopyrightNotice => {
+            let text = match parse_string(midi_file_stream, size) {
                 Ok(text) => text,
                 Err(err) => {
                     let msg = format!(
@@ -490,8 +548,8 @@ fn parse_meta_event<T: io::Read>(midiFileStream: &mut T) -> MidiResult<MidiMetaE
             Ok(MidiMetaEvent::CopyrightNotice{ text })
         },
 
-        SequenceOrTrackName => {
-            let text = match parse_string(midiFileStream, size) {
+        MidiMetaEventType::SequenceOrTrackName => {
+            let text = match parse_string(midi_file_stream, size) {
                 Ok(text) => text,
                 Err(err) => {
                     let msg = format!(
@@ -503,8 +561,8 @@ fn parse_meta_event<T: io::Read>(midiFileStream: &mut T) -> MidiResult<MidiMetaE
             Ok(MidiMetaEvent::SequenceOrTrackName{ text })
         },
 
-        InstrumentName => {
-            let text = match parse_string(midiFileStream, size) {
+        MidiMetaEventType::InstrumentName => {
+            let text = match parse_string(midi_file_stream, size) {
                 Ok(text) => text,
                 Err(err) => {
                     let msg = format!(
@@ -516,8 +574,8 @@ fn parse_meta_event<T: io::Read>(midiFileStream: &mut T) -> MidiResult<MidiMetaE
             Ok(MidiMetaEvent::InstrumentName{ text })
         },
 
-        Lyrics => {
-            let text = match parse_string(midiFileStream, size) {
+        MidiMetaEventType::Lyrics => {
+            let text = match parse_string(midi_file_stream, size) {
                 Ok(text) => text,
                 Err(err) => {
                     let msg = format!(
@@ -529,8 +587,8 @@ fn parse_meta_event<T: io::Read>(midiFileStream: &mut T) -> MidiResult<MidiMetaE
             Ok(MidiMetaEvent::Lyrics{ text })
         },
 
-        Marker => {
-            let text = match parse_string(midiFileStream, size) {
+        MidiMetaEventType::Marker => {
+            let text = match parse_string(midi_file_stream, size) {
                 Ok(text) => text,
                 Err(err) => {
                     let msg = format!(
@@ -542,8 +600,8 @@ fn parse_meta_event<T: io::Read>(midiFileStream: &mut T) -> MidiResult<MidiMetaE
             Ok(MidiMetaEvent::Marker{ text })
         },
 
-        CuePoint => {
-            let text = match parse_string(midiFileStream, size) {
+        MidiMetaEventType::CuePoint => {
+            let text = match parse_string(midi_file_stream, size) {
                 Ok(text) => text,
                 Err(err) => {
                     let msg = format!(
@@ -555,24 +613,24 @@ fn parse_meta_event<T: io::Read>(midiFileStream: &mut T) -> MidiResult<MidiMetaE
             Ok(MidiMetaEvent::CuePoint{ text })
         },
 
-        MidiChannelPrefix => {
-            let channel_byte: [u8; 1];
-            read_with_eof_check!(midiFileStream, channel_byte);
+        MidiMetaEventType::MidiChannelPrefix => {
+            let mut channel_byte: [u8; 1] = [0; 1];
+            read_with_eof_check!(midi_file_stream, &mut channel_byte);
             Ok(MidiMetaEvent::MidiChannelPrefix{ channel: channel_byte[0] })
         },
 
-        EndOfTrack => Ok(MidiMetaEvent::EndOfTrack),
+        MidiMetaEventType::EndOfTrack => Ok(MidiMetaEvent::EndOfTrack),
 
-        SetTempo => {
-            let tempo_bytes: [u8; 4];
-            read_with_eof_check!(midiFileStream, tempo_bytes);
+        MidiMetaEventType::SetTempo => {
+            let mut tempo_bytes: [u8; 4] = [0; 4];
+            read_with_eof_check!(midi_file_stream, &mut tempo_bytes);
             let tempo = u32::from_be_bytes(tempo_bytes);
             Ok(MidiMetaEvent::SetTempo{ tempo })
         },
 
-        SmpteOffset => {
-            let bytes: [u8; 5];
-            read_with_eof_check!(midiFileStream, bytes);
+        MidiMetaEventType::SmpteOffset => {
+            let mut bytes: [u8; 5] = [0; 5];
+            read_with_eof_check!(midi_file_stream, &mut bytes);
             Ok(MidiMetaEvent::SmpteOffset {
                 hour: bytes[0],
                 min: bytes[1],
@@ -582,9 +640,9 @@ fn parse_meta_event<T: io::Read>(midiFileStream: &mut T) -> MidiResult<MidiMetaE
             })
         },
 
-        TimeSignature => {
-            let bytes: [u8; 4];
-            read_with_eof_check!(midiFileStream, bytes);
+        MidiMetaEventType::TimeSignature => {
+            let mut bytes: [u8; 4] = [0; 4];
+            read_with_eof_check!(midi_file_stream, &mut bytes);
             Ok(MidiMetaEvent::TimeSignature {
                 numerator: bytes[0],
                 denominator: bytes[1],
@@ -593,18 +651,18 @@ fn parse_meta_event<T: io::Read>(midiFileStream: &mut T) -> MidiResult<MidiMetaE
             })
         },
 
-        KeySignature => {
-            let bytes: [u8; 2];
-            read_with_eof_check!(midiFileStream, bytes);
+        MidiMetaEventType::KeySignature => {
+            let mut bytes: [u8; 2] = [0; 2];
+            read_with_eof_check!(midi_file_stream, &mut bytes);
             Ok(MidiMetaEvent::KeySignature {
                 key: bytes[0],
                 scale: bytes[1]
             })
         }
 
-        SequencerSpecific => {
+        MidiMetaEventType::SequencerSpecific => {
             // WRONG. This is not variable length. it's just a bunch of bytes until size is fulfilled
-            let data = match parse_variable_length(midiFileStream) {
+            let data = match parse_variable_length(midi_file_stream) {
                 Ok(data) => data,
                 Err(err) => {
                     let msg = format!("Failed to sequencer specific meta event: {}", err);
@@ -617,45 +675,79 @@ fn parse_meta_event<T: io::Read>(midiFileStream: &mut T) -> MidiResult<MidiMetaE
 }
 
 // Might return a MIDI system event or nothing if the system event is divided and not yet complete
-fn parse_system_event<T: io::Read>(midiFileStream: &mut T) -> MidiResult<Option<MidiSystemEvent>> {
-    static static_data: Vec::<u8> = Vec::new();
-
-    let type_byte: [u8; 1];
-    read_with_eof_check!(midiFileStream, type_byte);
-    let size = match parse_variable_length(midiFileStream) {
+fn parse_system_event<T: io::Read>(
+    midi_file_stream: &mut T,
+    type_byte: u8,
+    divided_bytes: &mut Vec<u8>
+) -> MidiResult<MidiSystemEvent> {
+    let size = match parse_variable_length(midi_file_stream) {
         Ok(size) => size,
         Err(err) => {
             let msg = format!("Failed to parse system event size: {}", err);
             return Err(MidiError::new(&msg));
         }
     };
-    match type_byte[0] {
+    if size == 0 {
+        let msg = "Size of system event is 0";
+        return Err(MidiError::new(msg));
+    }
+
+    match type_byte {
         0xF0 => {
             // Normal system event or beginning of divided event
-            static_data.resize(size, 0_u8);
-            let data_slice = &mut static_data;
-            read_with_eof_check!(midiFileStream, data_slice);
-            if static_data.last() == 0xF7 {
-                static_data.pop(); // remove the 0xF7 byte that indicated the end
-                let data = static_data.clone();
-                return Ok(Some(MidiSystemEvent::Normal(data)));
+            let mut data = Vec::with_capacity(size);
+            data.resize(size, 0_u8);
+            let data_slice = &mut data;
+            read_with_eof_check!(midi_file_stream, data_slice);
+            if *data.last().expect("Data is empty? But size isn't 0?") == 0xF7 {
+                data.pop(); // remove the 0xF7 byte that indicated the end
+                return Ok(MidiSystemEvent::Normal(data));
             }
             // There's more coming later that we'll need to append to this
-            Ok(None);
+            Ok(MidiSystemEvent::Divided(data))
         },
+
         0xF7 => {
-            
+            // We're in the middle of a divided event, or this is an Authorization event
+            if !divided_bytes.is_empty() {
+                let mut additional_data = Vec::with_capacity(size);
+                additional_data.resize(size, 0_u8);
+                let data_slice = &mut additional_data;
+                read_with_eof_check!(midi_file_stream, data_slice);
+                divided_bytes.extend_from_slice(data_slice);
+                if *divided_bytes.last().expect("Static data is empty?") == 0xF7 {
+                    divided_bytes.pop(); // remove the 0xF7 byte that indicated the end
+                    return Ok(MidiSystemEvent::Normal(divided_bytes.clone()));
+                }
+                // There's even more
+                // TODO: We're passed a reference for divided bytes that we extend and then clone here.
+                // This is inefficent since the bytes in a divided event aren't even useful until
+                // the whole thing is completed.
+                return Ok(MidiSystemEvent::Divided(divided_bytes.clone()))
+            }
+            else {
+                // Authorization event
+                let mut event_data = Vec::with_capacity(size);
+                event_data.resize(size, 0_u8);
+                let data_slice = &mut event_data;
+                read_with_eof_check!(midi_file_stream, data_slice);
+                return Ok(MidiSystemEvent::Authorization(event_data))
+            }
+        }
+        _ => {
+            let msg = format!("Tried to parse system byte but type was unexpected {:04x}", type_byte);
+            return Err(MidiError::new(&msg));
         }
     }
 }
 
 // TODO: This needs many tests
-fn parse_variable_length<T: io::Read>(midiFileStream: &mut T) -> MidiResult<usize> {
+fn parse_variable_length<T: io::Read>(midi_file_stream: &mut T) -> MidiResult<usize> {
     let mut byte = [0x80_u8; 1];
     let mut bytes = Vec::new();
     while byte[0] & 0x80 == 0x80 {
         // a leading 1 on a byte indicates that there is a byte that follows
-        read_with_eof_check!(midiFileStream, byte);
+        read_with_eof_check!(midi_file_stream, &mut byte);
         bytes.push(byte[0]);
     }
 
@@ -673,10 +765,10 @@ fn parse_variable_length<T: io::Read>(midiFileStream: &mut T) -> MidiResult<usiz
     Ok(total_value)
 }
 
-fn parse_string<T: io::Read>(midiFileStream: &mut T, size: usize) -> MidiResult<String> {
+fn parse_string<T: io::Read>(midi_file_stream: &mut T, size: usize) -> MidiResult<String> {
     let mut byte_array = Vec::with_capacity(size);
     byte_array.resize(size, 0_u8);
-    read_with_eof_check!(midiFileStream, byte_array);
+    read_with_eof_check!(midi_file_stream, &mut byte_array);
     let string = match String::from_utf8(byte_array) {
         Ok(string) => string,
         Err(err) => {
