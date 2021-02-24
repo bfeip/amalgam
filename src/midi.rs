@@ -735,7 +735,7 @@ fn parse_system_event<T: io::Read>(
             }
         }
         _ => {
-            let msg = format!("Tried to parse system byte but type was unexpected {:04x}", type_byte);
+            let msg = format!("Tried to parse system byte but type was unexpected {:#04x}", type_byte);
             return Err(MidiError::new(&msg));
         }
     }
