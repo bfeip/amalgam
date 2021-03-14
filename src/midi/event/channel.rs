@@ -1,6 +1,9 @@
+use std::io;
+
 use super::super::error::*;
 use super::MidiEventType;
 
+#[derive(Debug, Clone, PartialEq)]
 pub enum MidiControllerEvent {
     BankSelect,
     Modulation,
@@ -77,16 +80,78 @@ impl MidiControllerEvent {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum MidiChannelEventBody {
+    NoteOff { note: u8, velocity: u8 },
+    NoteOn { note: u8, velocity: u8},
+    NoteAftertouch { note: u8, amount: u8 },
+    Controller { controller_event: MidiControllerEvent, value: u8 },
+    ProgramChange { program_number: u8 },
+    ChannelAftertouch { amount: u8 },
+    PitchBend { value: u16 }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct MidiChannelEvent {
-    delta_time: usize, // variable length in file
-    event_type: MidiEventType, // 4 bits in file
     channel: u8, // 4 bits in file
-    param1: u8,
-    param2: u8
+    inner_event: MidiChannelEventBody
 }
 
 impl MidiChannelEvent {
-    pub fn new(delta_time: usize, event_type: MidiEventType, channel: u8, param1: u8, param2: u8) -> Self {
-        Self { delta_time, event_type, channel, param1, param2 }
+    pub fn new(channel: u8, inner_event: MidiChannelEventBody) -> Self {
+        Self { channel, inner_event }
+    }
+
+    pub fn parse<T: io::Read>(mut midi_stream: T, event_type: MidiEventType, channel: u8) -> MidiResult<MidiChannelEvent> {
+        // Here I'm assuming that channel events that have only one param, like channel aftertouch
+        // do actually have a second paramater that's simply unused
+        let mut param_bytes: [u8; 2] = [0; 2];
+        read_with_eof_check!(midi_stream, &mut param_bytes);
+        let param1 = param_bytes[0];
+        let param2 = param_bytes[1];
+
+        let inner_event = match Self::new_inner_event(event_type, param1, param2) {
+            Ok(inner_event) => inner_event,
+            Err(err) => {
+                let msg = format!("Failed to parse MIDI inner channel event: {}", err);
+                return Err(MidiError::new(&msg));
+            }
+        };
+
+        Ok(MidiChannelEvent { channel, inner_event })
+    }
+
+    fn new_inner_event(event_type: MidiEventType, param1: u8, param2: u8) -> MidiResult<MidiChannelEventBody> {
+        let event = match event_type {
+            MidiEventType::NoteOff => MidiChannelEventBody::NoteOff { note: param1, velocity: param2 },
+            MidiEventType::NoteOn => MidiChannelEventBody::NoteOn { note: param1, velocity: param2 },
+            MidiEventType::NoteAftertouch => MidiChannelEventBody::NoteAftertouch { note: param1, amount: param2 },
+            MidiEventType::Controller => {
+                let controller_event = match MidiControllerEvent::from_byte(param1) {
+                    Ok(controller_event) => controller_event,
+                    Err(err) => {
+                        let msg = format!("Failed to parse MIDI controller event: {}", err);
+                        return Err(MidiError::new(&msg));
+                    }
+                };
+                MidiChannelEventBody::Controller { controller_event, value: param2 }
+            },
+            MidiEventType::ProgramChange => MidiChannelEventBody::ProgramChange { program_number: param1 },
+            MidiEventType::ChannelAftertouch => MidiChannelEventBody::ChannelAftertouch { amount: param1 },
+            MidiEventType::PitchBend => {
+                let lsb = (param1 as u16) & 0x007F;
+                let msb = (param2 as u16) & 0x007F;
+                let value = lsb | (msb << 7);
+                MidiChannelEventBody::PitchBend { value }
+            }
+            _ => {
+                let event_byte = event_type.to_byte();
+                let msg = format!("Unknown channel event type {:#03x}", event_byte);
+                return Err(MidiError::new(&msg));
+            }
+        };
+        Ok(event)
     }
 }
+
+// This is more or less completely tested by the parent module (midi::event)

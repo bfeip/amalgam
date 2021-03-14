@@ -122,7 +122,7 @@ fn parse_midi(midi_path: &str) -> MidiResult<MidiData> {
     Ok(MidiData::new(header, tracks))
 }
 
-fn parse_header_chunk<T: io::Read>(midi_file_stream: &mut T) -> MidiResult<HeaderChunk> {
+fn parse_header_chunk<T: io::Read>(mut midi_stream: T) -> MidiResult<HeaderChunk> {
     const EXPECTED_ID: &[u8] = "MThd".as_bytes();
     const EXPECTED_SIZE: u32 = 6;
 
@@ -133,7 +133,7 @@ fn parse_header_chunk<T: io::Read>(midi_file_stream: &mut T) -> MidiResult<Heade
     let mut time_division: [u8; 2] = [0; 2];
 
     // We only need to check that the ID is what we expected... It's useless after that
-    read_with_eof_check!(midi_file_stream, &mut id);
+    read_with_eof_check!(midi_stream, &mut id);
     if !id.iter().eq(EXPECTED_ID.iter()) {
         let expected_id_str = std::str::from_utf8(EXPECTED_ID).expect("EXPECTED_ID was not valid UTF-8 somehow");
         let id_str = match std::str::from_utf8(&id) {
@@ -152,28 +152,28 @@ fn parse_header_chunk<T: io::Read>(midi_file_stream: &mut T) -> MidiResult<Heade
     }
 
     // The size of the main header should always be 6... Just check that it is and carry on
-    read_with_eof_check!(midi_file_stream, &mut size);
+    read_with_eof_check!(midi_stream, &mut size);
     let size_u32 = u32::from_be_bytes(size);
     if size_u32 != EXPECTED_SIZE {
         let msg = format!("Expected main header size to be {}. Got {}", EXPECTED_SIZE, size_u32);
         return Err(MidiError::new(&msg)); 
     }
 
-    read_with_eof_check!(midi_file_stream, &mut format);
-    read_with_eof_check!(midi_file_stream, &mut n_tracks);
-    read_with_eof_check!(midi_file_stream, &mut time_division);
+    read_with_eof_check!(midi_stream, &mut format);
+    read_with_eof_check!(midi_stream, &mut n_tracks);
+    read_with_eof_check!(midi_stream, &mut time_division);
 
     HeaderChunk::from_bytes(format, n_tracks, time_division)
 }
 
-fn parse_track_chunk<T: io::Read + io::Seek>(midi_file_stream: &mut T) -> MidiResult<TrackChunk> {
+fn parse_track_chunk<T: io::Read + io::Seek>(mut midi_stream: T) -> MidiResult<TrackChunk> {
     const EXPECTED_ID: &[u8] = "MTrk".as_bytes();
     
     let mut id_bytes: [u8; 4] = [0; 4];
     let mut size_bytes: [u8; 4]= [0; 4];
 
     // We only need to check that the ID is what we expected... It's useless after that
-    read_with_eof_check!(midi_file_stream, &mut id_bytes);
+    read_with_eof_check!(midi_stream, &mut id_bytes);
     if !id_bytes.iter().eq(EXPECTED_ID.iter()) {
         let expected_id_str = std::str::from_utf8(EXPECTED_ID).expect("EXPECTED_ID was not valid UTF-8 somehow");
         let id_str = match std::str::from_utf8(&id_bytes) {
@@ -191,16 +191,16 @@ fn parse_track_chunk<T: io::Read + io::Seek>(midi_file_stream: &mut T) -> MidiRe
         return Err(MidiError::new(&msg));
     }
 
-    read_with_eof_check!(midi_file_stream, &mut size_bytes);
+    read_with_eof_check!(midi_stream, &mut size_bytes);
     let size = u32::from_be_bytes(size_bytes) as u64;
 
     let divided_event_bytes: &mut Vec<u8> = &mut Vec::new();
     let mut events = Vec::new();
     const HERE: io::SeekFrom = io::SeekFrom::Current(0);
-    let start_stream_position = midi_file_stream.seek(HERE).expect("Failed to get stream position");
-    while midi_file_stream.seek(HERE).unwrap() - start_stream_position < size {
+    let start_stream_position = midi_stream.seek(HERE).expect("Failed to get stream position");
+    while midi_stream.seek(HERE).unwrap() - start_stream_position < size {
         // While we haven't met the size yet
-        let event = match MidiEvent::parse(midi_file_stream, divided_event_bytes) {
+        let event = match MidiEvent::parse(&mut midi_stream, divided_event_bytes) {
             Ok(event) => event,
             Err(err) => {
                 let msg = format!("Failed to parse events: {}", err);
@@ -209,7 +209,7 @@ fn parse_track_chunk<T: io::Read + io::Seek>(midi_file_stream: &mut T) -> MidiRe
         };
         events.push(event)
     }
-    if midi_file_stream.seek(HERE).unwrap() > size {
+    if midi_stream.seek(HERE).unwrap() > size {
         let msg = "Read more than size of track";
         return Err(MidiError::new(msg));
     }
@@ -217,12 +217,12 @@ fn parse_track_chunk<T: io::Read + io::Seek>(midi_file_stream: &mut T) -> MidiRe
 }
 
 // TODO: This needs many tests
-fn parse_variable_length<T: io::Read>(midi_file_stream: &mut T) -> MidiResult<usize> {
+fn parse_variable_length<T: io::Read>(mut midi_stream: T) -> MidiResult<usize> {
     let mut byte = [0x80_u8; 1];
     let mut bytes = Vec::new();
     while byte[0] & 0x80 == 0x80 {
         // a leading 1 on a byte indicates that there is a byte that follows
-        read_with_eof_check!(midi_file_stream, &mut byte);
+        read_with_eof_check!(midi_stream, &mut byte);
         bytes.push(byte[0]);
     }
 
@@ -240,10 +240,10 @@ fn parse_variable_length<T: io::Read>(midi_file_stream: &mut T) -> MidiResult<us
     Ok(total_value)
 }
 
-fn parse_string<T: io::Read>(midi_file_stream: &mut T, size: usize) -> MidiResult<String> {
+fn parse_string<T: io::Read>(mut midi_stream: T, size: usize) -> MidiResult<String> {
     let mut byte_array = Vec::with_capacity(size);
     byte_array.resize(size, 0_u8);
-    read_with_eof_check!(midi_file_stream, &mut byte_array);
+    read_with_eof_check!(midi_stream, &mut byte_array);
     let string = match String::from_utf8(byte_array) {
         Ok(string) => string,
         Err(err) => {
@@ -257,4 +257,52 @@ fn parse_string<T: io::Read>(midi_file_stream: &mut T, size: usize) -> MidiResul
 fn throw_unexpected_eof(err: io::Error) -> MidiResult<()> {
     let msg = format!("Unexpected EOF: {}", err);
     return Err(MidiError::new(&msg));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+    use std::{env, fs};
+
+    fn get_repo_root() -> PathBuf {
+        let mut cur_dir = env::current_dir().expect("Couldn't get working dir?");
+        loop {
+            let contents = match fs::read_dir(&cur_dir) {
+                Ok(contents) => contents,
+                Err(_err) => {
+                    panic!("Failed to read contents of {}", cur_dir.display());
+                }
+            };
+            for dir_item in contents {
+                if dir_item.is_err() {
+                    continue;
+                }
+                let item_name = dir_item.unwrap().file_name();
+                if item_name.to_str().unwrap() == "Cargo.toml" {
+                    return cur_dir;
+                }
+            }
+            if cur_dir.pop() == false {
+                panic!("Failed to find repo root");
+            }
+        }
+    }
+
+    fn get_test_midi_file_path() -> PathBuf {
+        let test_midi_file_path_from_root: PathBuf = ["data", "never_gonna_give_you_up.mid"].iter().collect();
+        let repo_root = get_repo_root();
+        repo_root.join(test_midi_file_path_from_root)
+    }
+
+    #[test]
+    fn read_midi_file() {
+        let midi_file_path_buf = get_test_midi_file_path();
+        let midi_file_path_str = midi_file_path_buf.as_os_str().to_str().expect(
+            "Couldn't get str of test midi path"
+        );
+        if let Err(err) = parse_midi(midi_file_path_str) {
+            panic!("Failed to parse MIDI file: {}", err);
+        }
+    }
 }

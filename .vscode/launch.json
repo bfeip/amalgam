@@ -5,6 +5,25 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "GDB Test",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/target/debug/deps/synth-6d4b2d579f57bcd9",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
+            ]
+        },
+        {
             "name": "Run Debugger",
             "type": "cppvsdbg",
             "request": "launch",
@@ -20,7 +39,7 @@
             "name": "Run Test Debugger",
             "type": "cppvsdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/target/debug/deps/synth-44ac2653b71bf142.exe",
+            "program": "${workspaceFolder}/target/debug/deps/synth-6d4b2d579f57bcd9",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
