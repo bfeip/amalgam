@@ -10,7 +10,7 @@ use self::channel::MidiChannelEvent;
 use self::system::MidiSystemEvent;
 use self::meta::MidiMetaEvent;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum MidiEventType {
     NoteOff           = 0x8,
     NoteOn            = 0x9,

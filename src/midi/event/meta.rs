@@ -212,9 +212,12 @@ impl MidiMetaEvent {
             MidiMetaEventType::EndOfTrack => Ok(MidiMetaEvent::EndOfTrack),
     
             MidiMetaEventType::SetTempo => {
-                let mut tempo_bytes: [u8; 4] = [0; 4];
+                // Tempo is represented by 3 bytes in midi but we need 4 bytes to make a u32 so we just split off the
+                // first byte that'll always be zero
+                let mut tempo_u32_bytes: [u8; 4] = [0; 4];
+                let (_zero_byte, mut tempo_bytes) = tempo_u32_bytes.split_first_mut().unwrap();
                 read_with_eof_check!(midi_stream, &mut tempo_bytes);
-                let tempo = u32::from_be_bytes(tempo_bytes);
+                let tempo = u32::from_be_bytes(tempo_u32_bytes);
                 Ok(MidiMetaEvent::SetTempo{ tempo })
             },
     

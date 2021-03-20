@@ -103,12 +103,29 @@ impl MidiChannelEvent {
     }
 
     pub fn parse<T: io::Read>(mut midi_stream: T, event_type: MidiEventType, channel: u8) -> MidiResult<MidiChannelEvent> {
-        // Here I'm assuming that channel events that have only one param, like channel aftertouch
-        // do actually have a second paramater that's simply unused
-        let mut param_bytes: [u8; 2] = [0; 2];
-        read_with_eof_check!(midi_stream, &mut param_bytes);
-        let param1 = param_bytes[0];
-        let param2 = param_bytes[1];
+        let mut param1_byte: [u8; 1] = [0; 1];
+        let mut param2_byte: [u8; 1] = [0; 1];
+        read_with_eof_check!(midi_stream, &mut param1_byte);
+        let param1 = param1_byte[0];
+        let mut param2 = None;
+
+        // We might need a second param to create the event
+        match event_type {
+            MidiEventType::ProgramChange | MidiEventType::ChannelAftertouch => {
+                // These events have only one param. Don't read the second param...
+            },
+            _ => {
+                // These events have two params. Read the second one.
+                read_with_eof_check!(midi_stream, &mut param2_byte);
+                param2 = Some(param2_byte[0]);
+            }
+        }
+
+        #[cfg(feature = "verbose_midi")]
+        {
+            let param_string = format!("{}, {:?}", param1, param2);
+            println!("Parsed MIDI channel event param bytes for {:?} event: {:?}", event_type, param_string);
+        }
 
         let inner_event = match Self::new_inner_event(event_type, param1, param2) {
             Ok(inner_event) => inner_event,
@@ -121,11 +138,17 @@ impl MidiChannelEvent {
         Ok(MidiChannelEvent { channel, inner_event })
     }
 
-    fn new_inner_event(event_type: MidiEventType, param1: u8, param2: u8) -> MidiResult<MidiChannelEventBody> {
+    fn new_inner_event(event_type: MidiEventType, param1: u8, param2: Option<u8>) -> MidiResult<MidiChannelEventBody> {
         let event = match event_type {
-            MidiEventType::NoteOff => MidiChannelEventBody::NoteOff { note: param1, velocity: param2 },
-            MidiEventType::NoteOn => MidiChannelEventBody::NoteOn { note: param1, velocity: param2 },
-            MidiEventType::NoteAftertouch => MidiChannelEventBody::NoteAftertouch { note: param1, amount: param2 },
+            MidiEventType::NoteOff => MidiChannelEventBody::NoteOff {
+                note: param1, velocity: param2.expect("Expected this event to have a second param")
+            },
+            MidiEventType::NoteOn => MidiChannelEventBody::NoteOn {
+                note: param1, velocity: param2.expect("Expected this event to have a second param")
+            },
+            MidiEventType::NoteAftertouch => MidiChannelEventBody::NoteAftertouch {
+                note: param1, amount: param2.expect("Expected this event to have a second param")
+            },
             MidiEventType::Controller => {
                 let controller_event = match MidiControllerEvent::from_byte(param1) {
                     Ok(controller_event) => controller_event,
@@ -134,13 +157,15 @@ impl MidiChannelEvent {
                         return Err(MidiError::new(&msg));
                     }
                 };
-                MidiChannelEventBody::Controller { controller_event, value: param2 }
+                MidiChannelEventBody::Controller {
+                    controller_event, value: param2.expect("Expected this event to have a second param")
+                }
             },
             MidiEventType::ProgramChange => MidiChannelEventBody::ProgramChange { program_number: param1 },
             MidiEventType::ChannelAftertouch => MidiChannelEventBody::ChannelAftertouch { amount: param1 },
             MidiEventType::PitchBend => {
                 let lsb = (param1 as u16) & 0x007F;
-                let msb = (param2 as u16) & 0x007F;
+                let msb = (param2.unwrap() as u16) & 0x007F;
                 let value = lsb | (msb << 7);
                 MidiChannelEventBody::PitchBend { value }
             }

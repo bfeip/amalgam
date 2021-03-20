@@ -20,6 +20,7 @@ pub mod error;
 use std::io;
 use std::fs::File;
 
+#[derive(Debug)]
 struct MidiData {
     header: HeaderChunk,
     tracks: Vec<TrackChunk>
@@ -31,17 +32,20 @@ impl MidiData {
     }
 }
 
+#[derive(Debug)]
 enum TimeDivision {
     TicksPerBeat(u16),
     FramesPerSecond(u16)
 }
 
+#[derive(Debug)]
 enum MidiFormat {
     UniTrack = 0,
     MultiTrack = 1,
     MultiUniTrack = 2
 }
 
+#[derive(Debug)]
 struct HeaderChunk {
     format: MidiFormat, // 2 bytes in file
     n_tracks: usize, // 2 bytes in file
@@ -81,6 +85,7 @@ impl HeaderChunk {
     }
 }
 
+#[derive(Debug)]
 struct TrackChunk {
     events: Vec<MidiEvent>
 }
@@ -163,7 +168,12 @@ fn parse_header_chunk<T: io::Read>(mut midi_stream: T) -> MidiResult<HeaderChunk
     read_with_eof_check!(midi_stream, &mut n_tracks);
     read_with_eof_check!(midi_stream, &mut time_division);
 
-    HeaderChunk::from_bytes(format, n_tracks, time_division)
+    let header_chunk = HeaderChunk::from_bytes(format, n_tracks, time_division);
+    #[cfg(feature = "verbose_midi")]
+    {
+        println!("Read MIDI header chunk:\n{:#?}", header_chunk)
+}
+    header_chunk
 }
 
 fn parse_track_chunk<T: io::Read + io::Seek>(mut midi_stream: T) -> MidiResult<TrackChunk> {
@@ -190,9 +200,17 @@ fn parse_track_chunk<T: io::Read + io::Seek>(mut midi_stream: T) -> MidiResult<T
         let msg = format!("Expected main header ID to be {} got {}", expected_id_str, id_str);
         return Err(MidiError::new(&msg));
     }
+    #[cfg(feature = "verbose_midi")]
+    {
+        println!("Parsed track id and it matches the expected ID: {:?}", EXPECTED_ID);
+    }
 
     read_with_eof_check!(midi_stream, &mut size_bytes);
     let size = u32::from_be_bytes(size_bytes) as u64;
+    #[cfg(feature = "verbose_midi")]
+    {
+        println!("Parsed track size: {}", size);
+    }
 
     let divided_event_bytes: &mut Vec<u8> = &mut Vec::new();
     let mut events = Vec::new();
@@ -200,6 +218,11 @@ fn parse_track_chunk<T: io::Read + io::Seek>(mut midi_stream: T) -> MidiResult<T
     let start_stream_position = midi_stream.seek(HERE).expect("Failed to get stream position");
     while midi_stream.seek(HERE).unwrap() - start_stream_position < size {
         // While we haven't met the size yet
+        #[cfg(feature = "verbose_midi")]
+        {
+            let stream_position = midi_stream.seek(HERE).unwrap();
+            println!("Current MIDI stream position: {}", stream_position);
+        }
         let event = match MidiEvent::parse(&mut midi_stream, divided_event_bytes) {
             Ok(event) => event,
             Err(err) => {
@@ -207,13 +230,22 @@ fn parse_track_chunk<T: io::Read + io::Seek>(mut midi_stream: T) -> MidiResult<T
                 return Err(MidiError::new(&msg));
             }
         };
+        #[cfg(feature = "verbose_midi")]
+        {
+            println!("Parsed event:\n{:#?}", event)
+        }
         events.push(event)
     }
-    if midi_stream.seek(HERE).unwrap() > size {
+    if midi_stream.seek(HERE).unwrap() - start_stream_position > size {
         let msg = "Read more than size of track";
         return Err(MidiError::new(msg));
     }
-    Ok(TrackChunk::new(events))
+    let track_chunk = TrackChunk::new(events);
+    #[cfg(feature = "verbose_midi")]
+    {
+        println!("Read MIDI track chunk:\n{:#?}", track_chunk)
+    }
+    Ok(track_chunk)
 }
 
 // TODO: This needs many tests
@@ -237,6 +269,10 @@ fn parse_variable_length<T: io::Read>(mut midi_stream: T) -> MidiResult<usize> {
         total_value += byte_value;
     }
 
+    #[cfg(feature = "verbose_midi")]
+    {
+        println!("Parsed MIDI variable langth field with bytes {:?} and value {:?}", bytes, total_value);
+    }
     Ok(total_value)
 }
 
@@ -251,6 +287,10 @@ fn parse_string<T: io::Read>(mut midi_stream: T, size: usize) -> MidiResult<Stri
             return Err(MidiError::new(&msg));
         }
     };
+    #[cfg(feature = "verbose_midi")]
+    {
+        println!("Parsed MIDI string: {}", string);
+    }
     Ok(string)
 }
 
