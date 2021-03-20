@@ -366,7 +366,7 @@ mod tests {
     fn parse_set_tempo() {
         let expected_event = MidiMetaEvent::SetTempo{ tempo: 42 };
         let type_byte = MidiMetaEventType::SetTempo.to_byte();
-        let mut bytes: &[u8] = &[type_byte, 4, 0, 0, 0, 42];
+        let mut bytes: &[u8] = &[type_byte, 3, 0, 0, 42];
         let event = MidiMetaEvent::parse(&mut bytes).expect("Failed to parse");
         assert_eq!(event, expected_event, "Event does not mach expected");
     }

@@ -171,8 +171,8 @@ fn parse_header_chunk<T: io::Read>(mut midi_stream: T) -> MidiResult<HeaderChunk
     let header_chunk = HeaderChunk::from_bytes(format, n_tracks, time_division);
     #[cfg(feature = "verbose_midi")]
     {
-        println!("Read MIDI header chunk:\n{:#?}", header_chunk)
-}
+        println!("Read MIDI header chunk:\n{:#?}", header_chunk);
+    }
     header_chunk
 }
 
