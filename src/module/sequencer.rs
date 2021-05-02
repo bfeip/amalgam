@@ -1,4 +1,4 @@
-use super::traits::SignalOutputModule;
+use super::traits::{SignalOutputModule, OutputInfo};
 use super::common::EdgeDetection;
 use super::error::*;
 use super::empty::Empty;
@@ -206,7 +206,7 @@ impl Sequencer {
 }
 
 impl SignalOutputModule for Sequencer {
-    fn fill_output_buffer(&mut self, data: &mut [f32]) {
+    fn fill_output_buffer(&mut self, data: &mut [f32], output_info: &OutputInfo) {
         let data_size = data.len();
 
         // Closure to fill the actual data buffer
@@ -231,7 +231,7 @@ impl SignalOutputModule for Sequencer {
             // We are playing which means which step we are on is subject to change
             let mut clock_signals = Vec::with_capacity(data_size);
             clock_signals.resize(data_size, 0_f32); // NOTE: initializing this vec isn't really needed, but is safe
-            self.clock.fill_output_buffer(&mut clock_signals);
+            self.clock.fill_output_buffer(&mut clock_signals, output_info);
             println!("{:?}", clock_signals);
             let mut data_filled = 0_usize;
             for i in 1..data_size {
@@ -268,6 +268,13 @@ mod tests {
     use super::*;
     use super::super::oscillator;
     use crate::prelude::*;
+    use crate::clock;
+
+    fn create_output_info(sample_rate: usize, buffer_size: usize) -> OutputInfo {
+        let mut clock = clock::SampleClock::new(sample_rate);
+        let clock_values = clock.get_range(buffer_size);
+        OutputInfo::new(sample_rate, clock_values)
+    }
 
     fn create_test_sequencer(sample_rate: usize) -> Sequencer {
         let mut sequencer = Sequencer::with_steps(5);
@@ -276,7 +283,7 @@ mod tests {
         }
 
         // Set up clock
-        let mut clock_osc_state = oscillator::OscillatorState::new(sample_rate as f32);
+        let mut clock_osc_state = oscillator::OscillatorState::new();
         clock_osc_state.frequency = 1_f32;
         clock_osc_state.waveform = oscillator::Waveform::Pulse;
         clock_osc_state.pulse_width = 0.5;
@@ -308,11 +315,13 @@ mod tests {
         const EXPECTED_DATA: [f32; 9] = [0.0; 9];
         let mut sequencer = create_test_sequencer(SAMPLE_RATE);
 
+        let output_info = create_output_info(SAMPLE_RATE, EXPECTED_DATA.len());
+
         // Test output when not playing
         let mut data = Vec::with_capacity(SAMPLE_RATE);
         data.resize(SAMPLE_RATE, 0_f32);
         sequencer.stop();
-        sequencer.fill_output_buffer(&mut data);
+        sequencer.fill_output_buffer(&mut data, &output_info);
         for i in 0..SAMPLE_RATE {
             assert!(
                 float_eq(EXPECTED_DATA[i], data[i], 0.000001),
@@ -327,6 +336,8 @@ mod tests {
         const EXPECTED_DATA: [f32; 9] = [1.0; 9];
         let mut sequencer = create_test_sequencer(SAMPLE_RATE);
 
+        let output_info = create_output_info(SAMPLE_RATE, EXPECTED_DATA.len());
+
         // Test output when not playing
         let mut data = Vec::with_capacity(SAMPLE_RATE);
         data.resize(SAMPLE_RATE, 0_f32);
@@ -338,7 +349,7 @@ mod tests {
             "Next step value isn't what I expected. Expected 1.0. Got {}", new_step.value
         ); 
 
-        sequencer.fill_output_buffer(&mut data);
+        sequencer.fill_output_buffer(&mut data, &output_info);
         for i in 0..SAMPLE_RATE {
             assert!(
                 float_eq(EXPECTED_DATA[i], data[i], 0.000001),
@@ -353,13 +364,15 @@ mod tests {
         const EXPECTED_DATA: [f32; 9] = [0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 2.0];
         let mut sequencer = create_test_sequencer(SAMPLE_RATE);
 
+        let output_info = create_output_info(SAMPLE_RATE, EXPECTED_DATA.len());
+
         // Test output when not playing
         let mut data = Vec::with_capacity(SAMPLE_RATE);
         data.resize(SAMPLE_RATE, 0_f32);
         sequencer.set_edge_detection(EdgeDetection::Both);
         sequencer.start();
 
-        sequencer.fill_output_buffer(&mut data);
+        sequencer.fill_output_buffer(&mut data, &output_info);
         for i in 0..SAMPLE_RATE {
             assert!(
                 float_eq(EXPECTED_DATA[i], data[i], 0.000001),
@@ -374,6 +387,8 @@ mod tests {
         const EXPECTED_DATA: [f32; 9] = [0.0, 0.0, 0.0, 0.0, 2.0, 2.0, 2.0, 2.0, 3.0];
         let mut sequencer = create_test_sequencer(SAMPLE_RATE);
 
+        let output_info = create_output_info(SAMPLE_RATE, EXPECTED_DATA.len());
+
         // Test output when not playing
         let mut data = Vec::with_capacity(SAMPLE_RATE);
         data.resize(SAMPLE_RATE, 0_f32);
@@ -383,7 +398,7 @@ mod tests {
         let step_1 = sequencer.get_step_info_mut(1).expect("There is no step 1?");
         step_1.kind = SequencerStepKind::Skip;
 
-        sequencer.fill_output_buffer(&mut data);
+        sequencer.fill_output_buffer(&mut data, &output_info);
         for i in 0..SAMPLE_RATE {
             assert!(
                 float_eq(EXPECTED_DATA[i], data[i], 0.000001),
@@ -398,6 +413,8 @@ mod tests {
         const EXPECTED_DATA: [f32; 9] = [0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 0.0];
         let mut sequencer = create_test_sequencer(SAMPLE_RATE);
 
+        let output_info = create_output_info(SAMPLE_RATE, EXPECTED_DATA.len());
+
         // Test output when not playing
         let mut data = Vec::with_capacity(SAMPLE_RATE);
         data.resize(SAMPLE_RATE, 0_f32);
@@ -407,7 +424,7 @@ mod tests {
         let step_1 = sequencer.get_step_info_mut(1).expect("There is no step 1?");
         step_1.kind = SequencerStepKind::Repeat;
 
-        sequencer.fill_output_buffer(&mut data);
+        sequencer.fill_output_buffer(&mut data, &output_info);
         for i in 0..SAMPLE_RATE {
             assert!(
                 float_eq(EXPECTED_DATA[i], data[i], 0.000001),
@@ -422,6 +439,8 @@ mod tests {
         const EXPECTED_DATA: [f32; 9] = [0.0, 0.0, 0.0, 0.0, 4.0, 4.0, 4.0, 4.0, 0.0];
         let mut sequencer = create_test_sequencer(SAMPLE_RATE);
 
+        let output_info = create_output_info(SAMPLE_RATE, EXPECTED_DATA.len());
+
         // Test output when not playing
         let mut data = Vec::with_capacity(SAMPLE_RATE);
         data.resize(SAMPLE_RATE, 0_f32);
@@ -435,7 +454,7 @@ mod tests {
         let step_3 = sequencer.get_step_info_mut(3).expect("There is no step 3?");
         step_3.kind = SequencerStepKind::Skip;
 
-        sequencer.fill_output_buffer(&mut data);
+        sequencer.fill_output_buffer(&mut data, &output_info);
         for i in 0..SAMPLE_RATE {
             assert!(
                 float_eq(EXPECTED_DATA[i], data[i], 0.000001),
@@ -450,6 +469,8 @@ mod tests {
         const EXPECTED_DATA: [f32; 9] = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
         let mut sequencer = create_test_sequencer(SAMPLE_RATE);
 
+        let output_info = create_output_info(SAMPLE_RATE, EXPECTED_DATA.len());
+
         // Test output when not playing
         let mut data = Vec::with_capacity(SAMPLE_RATE);
         data.resize(SAMPLE_RATE, 0_f32);
@@ -460,7 +481,7 @@ mod tests {
             step.kind = SequencerStepKind::Skip;
         }
 
-        sequencer.fill_output_buffer(&mut data);
+        sequencer.fill_output_buffer(&mut data, &output_info);
         for i in 0..SAMPLE_RATE {
             assert!(
                 float_eq(EXPECTED_DATA[i], data[i], 0.000001),

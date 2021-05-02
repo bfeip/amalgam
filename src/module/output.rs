@@ -1,4 +1,4 @@
-use super::traits::SignalOutputModule;
+use super::traits::{SignalOutputModule, OutputInfo};
 use super::empty::Empty;
 
 /// A structure representing controls that would typically be on a output module
@@ -6,7 +6,7 @@ use super::empty::Empty;
 pub struct Output {
     volume: f32,
     panning: f32,
-    audio_input: Box<dyn SignalOutputModule>
+    audio_input: Box<dyn SignalOutputModule>,
 }
 
 impl Output {
@@ -32,8 +32,8 @@ impl Output {
 }
 
 impl SignalOutputModule for Output {
-    fn fill_output_buffer(&mut self, data: &mut [f32]) {
-        self.audio_input.fill_output_buffer(data);
+    fn fill_output_buffer(&mut self, data: &mut [f32], output_info: &OutputInfo) {
+        self.audio_input.fill_output_buffer(data, output_info);
         for datum in data.iter_mut() {
             // TODO: panning
             *datum = *datum * self.volume;

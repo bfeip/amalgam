@@ -1,6 +1,6 @@
 extern crate rand;
 
-use super::traits::SignalOutputModule;
+use super::traits::{SignalOutputModule, OutputInfo};
 
 struct NoiseGenerator {
 }
@@ -19,7 +19,7 @@ impl NoiseGenerator {
 }
 
 impl SignalOutputModule for NoiseGenerator {
-    fn fill_output_buffer(&mut self, data: &mut [f32]) {
+    fn fill_output_buffer(&mut self, data: &mut [f32], _output_info: &OutputInfo) {
         for datum in data.iter_mut() {
             *datum = self.get();
         }

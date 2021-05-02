@@ -1,5 +1,6 @@
 use std::io;
-use super::super::{error::*, parse_variable_length, parse_string};
+use super::super::{parse_variable_length, parse_string};
+use crate::midi::error::*;
 
 pub enum MidiMetaEventType {
     SequenceNumber,
@@ -68,7 +69,7 @@ impl MidiMetaEventType {
 
 #[derive(PartialEq, Debug, Clone)]
 pub enum MidiMetaEvent {
-    SequenceNumber { msb: u8, lsb: u8 },
+    SequenceNumber { number: u16 },
     TextEvent { text: String },
     CopyrightNotice { text: String },
     SequenceOrTrackName { text: String },
@@ -109,7 +110,8 @@ impl MidiMetaEvent {
             MidiMetaEventType::SequenceNumber => {
                 let mut bytes: [u8; 2] = [0; 2];
                 read_with_eof_check!(midi_stream, &mut bytes);
-                Ok(MidiMetaEvent::SequenceNumber{ msb: bytes[0], lsb: bytes[1] })
+                let number = u16::from_be_bytes(bytes);
+                Ok(MidiMetaEvent::SequenceNumber{ number })
             },
     
             MidiMetaEventType::TextEvent => {
@@ -274,7 +276,7 @@ mod tests {
 
     #[test]
     fn parse_sequence_number() {
-        let expected_event = MidiMetaEvent::SequenceNumber{ msb: 32, lsb: 64 };
+        let expected_event = MidiMetaEvent::SequenceNumber{ number: 8256 };
         let type_byte = MidiMetaEventType::SequenceNumber.to_byte();
         let mut bytes: &[u8] = &[type_byte, 2, 32, 64];
         let event = MidiMetaEvent::parse(&mut bytes).expect("Failed to parse");

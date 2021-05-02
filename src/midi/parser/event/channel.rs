@@ -1,6 +1,6 @@
 use std::io;
 
-use super::super::error::*;
+use super::super::super::error::*;
 use super::MidiEventType;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -176,6 +176,14 @@ impl MidiChannelEvent {
             }
         };
         Ok(event)
+    }
+
+    pub fn get_channel(&self) -> u8 {
+        self.channel
+    }
+
+    pub fn get_inner_event(&self) -> &MidiChannelEventBody {
+        &self.inner_event
     }
 }
 

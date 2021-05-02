@@ -1,6 +1,7 @@
 use std::io;
 
-use super::super::{error::*, parse_variable_length};
+use super::super::{parse_variable_length};
+use crate::midi::error::*;
 
 const NORMAL_TYPE_BYTE: u8 = 0xF0;
 const DIVIDED_OR_AUTH_TYPE_BYTE: u8 = 0xF7;

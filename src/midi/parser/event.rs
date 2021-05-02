@@ -4,7 +4,7 @@ pub mod meta;
 
 use std::io;
 
-use super::error::*;
+use super::super::error::*;
 use super::parse_variable_length;
 use self::channel::MidiChannelEvent;
 use self::system::MidiSystemEvent;
@@ -147,6 +147,14 @@ impl MidiEvent {
                 return Err(MidiError::new(&msg));
             }
         }
+    }
+
+    pub fn get_delta_time(&self) -> usize {
+        self.delta_time
+    }
+
+    pub fn get_event_body(&self) -> &MidiEventBody {
+        &self.inner_event
     }
 }
 

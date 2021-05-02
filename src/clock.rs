@@ -26,18 +26,28 @@ impl Clock {
 
 #[derive(Copy, Clone)]
 pub struct SampleClock {
-    sample_rate: f32,
-    value: f32
+    sample_rate: usize,
+    value: usize
 }
 
 impl SampleClock {
-    pub fn new(sample_rate: f32) -> Self {
-        let value = 0_f32;
+    pub fn new(sample_rate: usize) -> Self {
+        let value = 0;
         Self { sample_rate, value }
     }
 
-    pub fn get(&mut self) -> f32 {
-        self.value = (self.value + 1_f32) % self.sample_rate;
+    pub fn get(&mut self) -> usize {
+        self.value = (self.value + 1) % self.sample_rate;
         self.value
+    }
+
+    pub fn get_range(&mut self, amount: usize) -> Vec<usize> {
+        let mut ret = Vec::with_capacity(amount);
+        for i in 0..amount {
+            let value = (self.value + i + 1) % self.sample_rate;
+            ret.push(value)
+        }
+        self.value = (self.value + amount) % self.sample_rate;
+        ret
     }
 }

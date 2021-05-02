@@ -1,4 +1,4 @@
-use super::traits::SignalOutputModule;
+use super::traits::{SignalOutputModule, OutputInfo};
 use super::empty::Empty;
 
 enum Adsr {
@@ -151,11 +151,11 @@ impl Envelope {
 }
 
 impl SignalOutputModule for Envelope {
-    fn fill_output_buffer(&mut self, data: &mut [f32]) {
+    fn fill_output_buffer(&mut self, data: &mut [f32], output_info: &OutputInfo) {
         let data_size = data.len();
         let mut trigger_data = Vec::with_capacity(data_size);
         trigger_data.resize(data_size, 0.0);
-        self.trigger.fill_output_buffer(&mut trigger_data);
+        self.trigger.fill_output_buffer(&mut trigger_data, output_info);
 
         for (i, datum) in data.iter_mut().enumerate() {
             let triggered = trigger_data[i] > self.trigger_tolerance;
@@ -177,10 +177,11 @@ impl SignalOutputModule for Envelope {
 mod tests {
     use super::*;
     use crate::prelude::*;
+    use crate::clock;
 
     struct ConstantTrigger;
     impl SignalOutputModule for ConstantTrigger {
-        fn fill_output_buffer(&mut self, data: &mut [f32]) {
+        fn fill_output_buffer(&mut self, data: &mut [f32], _output_info: &OutputInfo) {
             for datum in data.iter_mut() {
                 *datum = 1.0;
             }
@@ -189,7 +190,7 @@ mod tests {
 
     struct SplitTrigger;
     impl SignalOutputModule for SplitTrigger {
-        fn fill_output_buffer(&mut self, data: &mut [f32]) {
+        fn fill_output_buffer(&mut self, data: &mut [f32], _output_info: &OutputInfo) {
             let (trigger_data, untrigger_data) = data.split_at_mut(data.len() / 2);
             for datum in trigger_data.iter_mut() {
                 *datum = 1.0;
@@ -198,6 +199,12 @@ mod tests {
                 *datum = 0.0;
             }
         }
+    }
+
+    fn create_output_info(sample_rate: usize, buffer_size: usize) -> OutputInfo {
+        let mut clock = clock::SampleClock::new(sample_rate);
+        let clock_values = clock.get_range(buffer_size);
+        OutputInfo::new(sample_rate, clock_values)
     }
 
     #[test]
@@ -211,12 +218,14 @@ mod tests {
         envelope.set_sustain_level(0.75);
         envelope.set_release_time(1000.0);
 
+        let output_info = create_output_info(SAMPLE_RATE, EXPECTED_DATA.len());
+
         let trigger = ConstantTrigger {};
         envelope.set_trigger(Box::new(trigger));
 
         let mut data = Vec::with_capacity(SAMPLE_RATE * 3);
         data.resize(SAMPLE_RATE * 3, 0.0);
-        envelope.fill_output_buffer(&mut data);
+        envelope.fill_output_buffer(&mut data, &output_info);
 
         for (got_datum, expected_datum) in data.iter().zip(EXPECTED_DATA.iter()) {
             assert!(
@@ -237,12 +246,14 @@ mod tests {
         envelope.set_sustain_level(0.5);
         envelope.set_release_time(1000.0);
 
+        let output_info = create_output_info(SAMPLE_RATE, EXPECTED_DATA.len());
+
         let trigger = SplitTrigger {};
         envelope.set_trigger(Box::new(trigger));
 
         let mut data = Vec::with_capacity(SAMPLE_RATE * 4);
         data.resize(SAMPLE_RATE * 4, 0.0);
-        envelope.fill_output_buffer(&mut data);
+        envelope.fill_output_buffer(&mut data, &output_info);
 
         for (got_datum, expected_datum) in data.iter().zip(EXPECTED_DATA.iter()) {
             assert!(
