@@ -1,9 +1,9 @@
-use super::MidiFile;
+use super::MidiModuleBase;
 use super::super::error::{ModuleError, ModuleResult};
 use std::sync::{Mutex, Arc};
 use std::collections::HashSet;
 
-type MidiFileMutexPtr<'a> = Arc<Mutex<MidiFile<'a>>>;
+type MidiFileMutexPtr<'a> = Arc<Mutex<MidiModuleBase<'a>>>;
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 enum MidiMonoNotePriority {

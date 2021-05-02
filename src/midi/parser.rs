@@ -3,7 +3,7 @@
 #![macro_use]
 
 use super::error::*;
-use event::MidiEvent;
+use event::Event;
 
 macro_rules! read_with_eof_check {
     ($midiFileStream:expr, $buffer:expr) => {
@@ -81,7 +81,7 @@ pub enum TimeDivision {
 }
 
 #[derive(Debug)]
-enum MidiFormat {
+enum Format {
     UniTrack = 0,
     MultiTrack = 1,
     MultiUniTrack = 2
@@ -89,21 +89,21 @@ enum MidiFormat {
 
 #[derive(Debug)]
 pub struct HeaderChunk {
-    format: MidiFormat, // 2 bytes in file
+    format: Format, // 2 bytes in file
     n_tracks: usize, // 2 bytes in file
     time_division: TimeDivision
 }
 
 impl HeaderChunk {
-    fn new(format: MidiFormat, n_tracks: usize, time_division: TimeDivision) -> Self {
+    fn new(format: Format, n_tracks: usize, time_division: TimeDivision) -> Self {
         HeaderChunk { format, n_tracks, time_division }
     }
 
     fn from_bytes(format_bytes: [u8; 2], n_tracks_bytes: [u8; 2], time_division_bytes: [u8; 2]) -> MidiResult<Self> {
         let format = match format_bytes[1] {
-            0 => MidiFormat::UniTrack,
-            1 => MidiFormat::MultiTrack,
-            2 => MidiFormat::MultiUniTrack,
+            0 => Format::UniTrack,
+            1 => Format::MultiTrack,
+            2 => Format::MultiUniTrack,
             _ => {
                 let format_u16 = u16::from_be_bytes(format_bytes);
                 let msg = format!("Got unknown MIDI format {:#06x}", format_u16);
@@ -186,11 +186,11 @@ impl HeaderChunk {
 
 #[derive(Debug)]
 pub struct TrackChunk {
-    events: Vec<MidiEvent>,
+    events: Vec<Event>,
 }
 
 impl TrackChunk {
-    fn new(events: Vec<MidiEvent>) -> Self {
+    fn new(events: Vec<Event>) -> Self {
         TrackChunk { events }
     }
 
@@ -241,7 +241,7 @@ impl TrackChunk {
                 let stream_position = midi_stream.seek(HERE).unwrap();
                 println!("Current MIDI stream position: {}", stream_position);
             }
-            let event = match MidiEvent::parse(&mut midi_stream, divided_event_bytes) {
+            let event = match Event::parse(&mut midi_stream, divided_event_bytes) {
                 Ok(event) => event,
                 Err(err) => {
                     let msg = format!("Failed to parse events: {}", err);
@@ -266,7 +266,7 @@ impl TrackChunk {
         Ok(track_chunk)
     }
 
-    pub fn iter_events(&self) -> std::slice::Iter<MidiEvent> {
+    pub fn iter_events(&self) -> std::slice::Iter<Event> {
         self.events.iter()
     }
 }

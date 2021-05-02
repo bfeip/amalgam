@@ -136,7 +136,7 @@ mod tests {
     use super::super::oscillator;
     use crate::clock;
 
-    fn get_square_and_25_pulse_mixer_inputs(sample_rate: usize) -> (MixerInput, MixerInput) {
+    fn get_square_and_25_pulse_mixer_inputs() -> (MixerInput, MixerInput) {
         let mut osc1_state = oscillator::OscillatorState::new();
         osc1_state.frequency = 1.0;
         osc1_state.waveform = oscillator::Waveform::Pulse;
@@ -162,7 +162,7 @@ mod tests {
         let mut mixer = Mixer::new();
         mixer.compression_mode = MixerCompressMode::None;
 
-        let (mixer_input_1, mixer_input_2) = get_square_and_25_pulse_mixer_inputs(SAMPLE_RATE);
+        let (mixer_input_1, mixer_input_2) = get_square_and_25_pulse_mixer_inputs();
 
         mixer.add_input(mixer_input_1);
         mixer.add_input(mixer_input_2);
@@ -189,7 +189,7 @@ mod tests {
         let mut mixer = Mixer::new();
         mixer.compression_mode = MixerCompressMode::None;
 
-        let (mut mixer_input_1, mixer_input_2) = get_square_and_25_pulse_mixer_inputs(SAMPLE_RATE);
+        let (mut mixer_input_1, mixer_input_2) = get_square_and_25_pulse_mixer_inputs();
         mixer_input_1.level = 0.5;
 
         mixer.add_input(mixer_input_1);
@@ -217,7 +217,7 @@ mod tests {
         let mut mixer = Mixer::new();
         mixer.compression_mode = MixerCompressMode::Compress;
 
-        let (mut mixer_input_1, mixer_input_2) = get_square_and_25_pulse_mixer_inputs(SAMPLE_RATE);
+        let (mut mixer_input_1, mixer_input_2) = get_square_and_25_pulse_mixer_inputs();
         mixer_input_1.level = 0.5;
 
         mixer.add_input(mixer_input_1);
@@ -245,7 +245,7 @@ mod tests {
         let mut mixer = Mixer::new();
         mixer.compression_mode = MixerCompressMode::Limit;
 
-        let (mixer_input_1, mixer_input_2) = get_square_and_25_pulse_mixer_inputs(SAMPLE_RATE);
+        let (mixer_input_1, mixer_input_2) = get_square_and_25_pulse_mixer_inputs();
 
         mixer.add_input(mixer_input_1);
         mixer.add_input(mixer_input_2);

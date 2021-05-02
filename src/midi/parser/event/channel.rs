@@ -1,10 +1,10 @@
 use std::io;
 
 use super::super::super::error::*;
-use super::MidiEventType;
+use super::EventType;
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum MidiControllerEvent {
+pub enum ControllerEvent {
     BankSelect,
     Modulation,
     BreathController,
@@ -37,40 +37,40 @@ pub enum MidiControllerEvent {
     ModeMessages(u8)
 }
 
-impl MidiControllerEvent {
+impl ControllerEvent {
     pub fn from_byte(byte: u8) -> MidiResult<Self> {
         let controller_event = match byte {
-            0x00        => MidiControllerEvent::BankSelect,
-            0x01        => MidiControllerEvent::Modulation,
-            0x02        => MidiControllerEvent::BreathController,
-            0x04        => MidiControllerEvent::FootController,
-            0x05        => MidiControllerEvent::PortamentoTime,
-            0x06        => MidiControllerEvent::DataEntryMsb,
-            0x07        => MidiControllerEvent::MainVolume,
-            0x08        => MidiControllerEvent::Balance,
-            0x0A        => MidiControllerEvent::Pan,
-            0x0B        => MidiControllerEvent::ExpressionController,
-            0x0C        => MidiControllerEvent::EffectControl1,
-            0x0D        => MidiControllerEvent::EffectControl2,
-            0x10..=0x13 => MidiControllerEvent::GeneralPurposeControllers(byte - 0x10),
-            0x20..=0x3F => MidiControllerEvent::LsbForControllers(byte - 0x20),
-            0x40        => MidiControllerEvent::DamperPedal,
-            0x41        => MidiControllerEvent::Portamento,
-            0x42        => MidiControllerEvent::Sostenuto,
-            0x43        => MidiControllerEvent::SoftPedal,
-            0x44        => MidiControllerEvent::LegatoFootswitch,
-            0x45        => MidiControllerEvent::Hold2,
-            0x46..=0x4F => MidiControllerEvent::SoundController(byte - 0x46),
-            0x50..=0x53 => MidiControllerEvent::GeneralPurposeControllers(byte - 0x50),
-            0x54        => MidiControllerEvent::PortamentoControl,
-            0x5B..=0x5F => MidiControllerEvent::EffectsDepth(byte - 0x5B),
-            0x60        => MidiControllerEvent::DataIncrement,
-            0x61        => MidiControllerEvent::DataDecrement,
-            0x62        => MidiControllerEvent::NonRegisteredParameterNumberLsb,
-            0x63        => MidiControllerEvent::NonRegisteredParameterNumberMsb,
-            0x64        => MidiControllerEvent::RegisteredParameterNumberLsb,
-            0x65        => MidiControllerEvent::RegisteredParameterNumberMsb,
-            0x79..=0x7F => MidiControllerEvent::ModeMessages(byte - 0x79),
+            0x00        => ControllerEvent::BankSelect,
+            0x01        => ControllerEvent::Modulation,
+            0x02        => ControllerEvent::BreathController,
+            0x04        => ControllerEvent::FootController,
+            0x05        => ControllerEvent::PortamentoTime,
+            0x06        => ControllerEvent::DataEntryMsb,
+            0x07        => ControllerEvent::MainVolume,
+            0x08        => ControllerEvent::Balance,
+            0x0A        => ControllerEvent::Pan,
+            0x0B        => ControllerEvent::ExpressionController,
+            0x0C        => ControllerEvent::EffectControl1,
+            0x0D        => ControllerEvent::EffectControl2,
+            0x10..=0x13 => ControllerEvent::GeneralPurposeControllers(byte - 0x10),
+            0x20..=0x3F => ControllerEvent::LsbForControllers(byte - 0x20),
+            0x40        => ControllerEvent::DamperPedal,
+            0x41        => ControllerEvent::Portamento,
+            0x42        => ControllerEvent::Sostenuto,
+            0x43        => ControllerEvent::SoftPedal,
+            0x44        => ControllerEvent::LegatoFootswitch,
+            0x45        => ControllerEvent::Hold2,
+            0x46..=0x4F => ControllerEvent::SoundController(byte - 0x46),
+            0x50..=0x53 => ControllerEvent::GeneralPurposeControllers(byte - 0x50),
+            0x54        => ControllerEvent::PortamentoControl,
+            0x5B..=0x5F => ControllerEvent::EffectsDepth(byte - 0x5B),
+            0x60        => ControllerEvent::DataIncrement,
+            0x61        => ControllerEvent::DataDecrement,
+            0x62        => ControllerEvent::NonRegisteredParameterNumberLsb,
+            0x63        => ControllerEvent::NonRegisteredParameterNumberMsb,
+            0x64        => ControllerEvent::RegisteredParameterNumberLsb,
+            0x65        => ControllerEvent::RegisteredParameterNumberMsb,
+            0x79..=0x7F => ControllerEvent::ModeMessages(byte - 0x79),
             _ => {
                 let msg = format!("unknown MIDI controller message {:#04x}", byte);
                 return Err(MidiError::new(&msg)) 
@@ -81,11 +81,11 @@ impl MidiControllerEvent {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum MidiChannelEventBody {
+pub enum ChannelEventBody {
     NoteOff { note: u8, velocity: u8 },
     NoteOn { note: u8, velocity: u8},
     NoteAftertouch { note: u8, amount: u8 },
-    Controller { controller_event: MidiControllerEvent, value: u8 },
+    Controller { controller_event: ControllerEvent, value: u8 },
     ProgramChange { program_number: u8 },
     ChannelAftertouch { amount: u8 },
     PitchBend { value: u16 }
@@ -94,15 +94,15 @@ pub enum MidiChannelEventBody {
 #[derive(Debug, Clone, PartialEq)]
 pub struct MidiChannelEvent {
     channel: u8, // 4 bits in file
-    inner_event: MidiChannelEventBody
+    event_body: ChannelEventBody
 }
 
 impl MidiChannelEvent {
-    pub fn new(channel: u8, inner_event: MidiChannelEventBody) -> Self {
-        Self { channel, inner_event }
+    pub fn new(channel: u8, event_body: ChannelEventBody) -> Self {
+        Self { channel, event_body }
     }
 
-    pub fn parse<T: io::Read>(mut midi_stream: T, event_type: MidiEventType, channel: u8) -> MidiResult<MidiChannelEvent> {
+    pub fn parse<T: io::Read>(mut midi_stream: T, event_type: EventType, channel: u8) -> MidiResult<MidiChannelEvent> {
         let mut param1_byte: [u8; 1] = [0; 1];
         let mut param2_byte: [u8; 1] = [0; 1];
         read_with_eof_check!(midi_stream, &mut param1_byte);
@@ -111,7 +111,7 @@ impl MidiChannelEvent {
 
         // We might need a second param to create the event
         match event_type {
-            MidiEventType::ProgramChange | MidiEventType::ChannelAftertouch => {
+            EventType::ProgramChange | EventType::ChannelAftertouch => {
                 // These events have only one param. Don't read the second param...
             },
             _ => {
@@ -127,7 +127,7 @@ impl MidiChannelEvent {
             println!("Parsed MIDI channel event param bytes for {:?} event: {:?}", event_type, param_string);
         }
 
-        let inner_event = match Self::new_inner_event(event_type, param1, param2) {
+        let event_body = match Self::new_event_body(event_type, param1, param2) {
             Ok(inner_event) => inner_event,
             Err(err) => {
                 let msg = format!("Failed to parse MIDI inner channel event: {}", err);
@@ -135,39 +135,39 @@ impl MidiChannelEvent {
             }
         };
 
-        Ok(MidiChannelEvent { channel, inner_event })
+        Ok(MidiChannelEvent { channel, event_body })
     }
 
-    fn new_inner_event(event_type: MidiEventType, param1: u8, param2: Option<u8>) -> MidiResult<MidiChannelEventBody> {
+    fn new_event_body(event_type: EventType, param1: u8, param2: Option<u8>) -> MidiResult<ChannelEventBody> {
         let event = match event_type {
-            MidiEventType::NoteOff => MidiChannelEventBody::NoteOff {
+            EventType::NoteOff => ChannelEventBody::NoteOff {
                 note: param1, velocity: param2.expect("Expected this event to have a second param")
             },
-            MidiEventType::NoteOn => MidiChannelEventBody::NoteOn {
+            EventType::NoteOn => ChannelEventBody::NoteOn {
                 note: param1, velocity: param2.expect("Expected this event to have a second param")
             },
-            MidiEventType::NoteAftertouch => MidiChannelEventBody::NoteAftertouch {
+            EventType::NoteAftertouch => ChannelEventBody::NoteAftertouch {
                 note: param1, amount: param2.expect("Expected this event to have a second param")
             },
-            MidiEventType::Controller => {
-                let controller_event = match MidiControllerEvent::from_byte(param1) {
+            EventType::Controller => {
+                let controller_event = match ControllerEvent::from_byte(param1) {
                     Ok(controller_event) => controller_event,
                     Err(err) => {
                         let msg = format!("Failed to parse MIDI controller event: {}", err);
                         return Err(MidiError::new(&msg));
                     }
                 };
-                MidiChannelEventBody::Controller {
+                ChannelEventBody::Controller {
                     controller_event, value: param2.expect("Expected this event to have a second param")
                 }
             },
-            MidiEventType::ProgramChange => MidiChannelEventBody::ProgramChange { program_number: param1 },
-            MidiEventType::ChannelAftertouch => MidiChannelEventBody::ChannelAftertouch { amount: param1 },
-            MidiEventType::PitchBend => {
+            EventType::ProgramChange => ChannelEventBody::ProgramChange { program_number: param1 },
+            EventType::ChannelAftertouch => ChannelEventBody::ChannelAftertouch { amount: param1 },
+            EventType::PitchBend => {
                 let lsb = (param1 as u16) & 0x007F;
                 let msb = (param2.unwrap() as u16) & 0x007F;
                 let value = lsb | (msb << 7);
-                MidiChannelEventBody::PitchBend { value }
+                ChannelEventBody::PitchBend { value }
             }
             _ => {
                 let event_byte = event_type.to_byte();
@@ -182,8 +182,8 @@ impl MidiChannelEvent {
         self.channel
     }
 
-    pub fn get_inner_event(&self) -> &MidiChannelEventBody {
-        &self.inner_event
+    pub fn get_inner_event(&self) -> &ChannelEventBody {
+        &self.event_body
     }
 }
 

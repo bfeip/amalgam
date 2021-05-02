@@ -81,34 +81,34 @@ impl<'data> Track<'data> {
         for event in track_chunk.iter_events() {
             let time_delta = event.get_delta_time();
             match event.get_event_body() {
-                parser::event::MidiEventBody::Channel(parser_channel_event) => {
+                parser::event::EventBody::Channel(parser_channel_event) => {
                     // Put any channel events into their respective channels
                     let channel = parser_channel_event.get_channel() as usize;
                     let channel_event = ChannelEvent::new(time_delta, parser_channel_event);
                     ret.channels[channel].add_event(channel_event);
                 },
 
-                parser::event::MidiEventBody::Meta(parser_meta_event) => {
-                    use parser::event::meta::MidiMetaEvent;
+                parser::event::EventBody::Meta(parser_meta_event) => {
+                    use parser::event::meta::MetaEvent;
                     match parser_meta_event {
                         // TODO: is it possible to specifiy these more than once per
                         // track. E.g. change tempo in the middle of a track?
-                        MidiMetaEvent::SequenceNumber { number } => {
+                        MetaEvent::SequenceNumber { number } => {
                             ret.sequence_number = Some(*number);
                         }
-                        MidiMetaEvent::SequenceOrTrackName { text } => {
+                        MetaEvent::SequenceOrTrackName { text } => {
                             ret.track_name = text;
                         }
-                        MidiMetaEvent::InstrumentName { text } => {
+                        MetaEvent::InstrumentName { text } => {
                             match meta_event_channel_prefix {
                                 Some(channel) => ret.channels[channel].set_instrument_name(text),
                                 None => ret.instrument_name = text
                             }
                         }
-                        MidiMetaEvent::MidiChannelPrefix { channel } => {
+                        MetaEvent::MidiChannelPrefix { channel } => {
                             meta_event_channel_prefix = Some(*channel as usize)
                         }
-                        MidiMetaEvent::SetTempo { tempo } => {
+                        MetaEvent::SetTempo { tempo } => {
                             ret.tempo = *tempo;
                         }
                         _ => {
@@ -117,7 +117,7 @@ impl<'data> Track<'data> {
                     }
                 },
 
-                parser::event::MidiEventBody::System(_parser_system_event) => {
+                parser::event::EventBody::System(_parser_system_event) => {
                     // We don't care about system events
                 }
             }
@@ -214,12 +214,12 @@ enum ChannelEvent {
 
 impl ChannelEvent {
     fn new(time_delta: usize, parser_event: &parser::event::channel::MidiChannelEvent) -> Self {
-        use parser::event::channel::MidiChannelEventBody;
+        use parser::event::channel::ChannelEventBody;
         let parser_event_body = parser_event.get_inner_event();
         match parser_event_body {
-            &MidiChannelEventBody::NoteOn{ note, velocity } =>
+            &ChannelEventBody::NoteOn{ note, velocity } =>
                 ChannelEvent::Note(NoteEvent::new(time_delta, NoteEventType::On, note, velocity)),
-            &MidiChannelEventBody::NoteOff{ note, velocity } =>
+            &ChannelEventBody::NoteOff{ note, velocity } =>
                 ChannelEvent::Note(NoteEvent::new(time_delta, NoteEventType::Off, note, velocity)),
             _ => ChannelEvent::Unused
         }

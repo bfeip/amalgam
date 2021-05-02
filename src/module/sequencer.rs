@@ -276,7 +276,7 @@ mod tests {
         OutputInfo::new(sample_rate, clock_values)
     }
 
-    fn create_test_sequencer(sample_rate: usize) -> Sequencer {
+    fn create_test_sequencer() -> Sequencer {
         let mut sequencer = Sequencer::with_steps(5);
         for (i, step) in sequencer.iter_mut().enumerate() {
             step.value = i as f32;
@@ -313,7 +313,7 @@ mod tests {
     fn test_stopped_output() {
         const SAMPLE_RATE: usize = 9;
         const EXPECTED_DATA: [f32; 9] = [0.0; 9];
-        let mut sequencer = create_test_sequencer(SAMPLE_RATE);
+        let mut sequencer = create_test_sequencer();
 
         let output_info = create_output_info(SAMPLE_RATE, EXPECTED_DATA.len());
 
@@ -334,7 +334,7 @@ mod tests {
     fn test_stopped_output_after_step() {
         const SAMPLE_RATE: usize = 9;
         const EXPECTED_DATA: [f32; 9] = [1.0; 9];
-        let mut sequencer = create_test_sequencer(SAMPLE_RATE);
+        let mut sequencer = create_test_sequencer();
 
         let output_info = create_output_info(SAMPLE_RATE, EXPECTED_DATA.len());
 
@@ -362,7 +362,7 @@ mod tests {
     fn test_playing_output() {
         const SAMPLE_RATE: usize = 9;
         const EXPECTED_DATA: [f32; 9] = [0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 2.0];
-        let mut sequencer = create_test_sequencer(SAMPLE_RATE);
+        let mut sequencer = create_test_sequencer();
 
         let output_info = create_output_info(SAMPLE_RATE, EXPECTED_DATA.len());
 
@@ -385,7 +385,7 @@ mod tests {
     fn test_playing_skip_steps_output() {
         const SAMPLE_RATE: usize = 9;
         const EXPECTED_DATA: [f32; 9] = [0.0, 0.0, 0.0, 0.0, 2.0, 2.0, 2.0, 2.0, 3.0];
-        let mut sequencer = create_test_sequencer(SAMPLE_RATE);
+        let mut sequencer = create_test_sequencer();
 
         let output_info = create_output_info(SAMPLE_RATE, EXPECTED_DATA.len());
 
@@ -411,7 +411,7 @@ mod tests {
     fn test_playing_repeat_steps_output() {
         const SAMPLE_RATE: usize = 9;
         const EXPECTED_DATA: [f32; 9] = [0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 0.0];
-        let mut sequencer = create_test_sequencer(SAMPLE_RATE);
+        let mut sequencer = create_test_sequencer();
 
         let output_info = create_output_info(SAMPLE_RATE, EXPECTED_DATA.len());
 
@@ -437,7 +437,7 @@ mod tests {
     fn test_playing_cycle_output() {
         const SAMPLE_RATE: usize = 9;
         const EXPECTED_DATA: [f32; 9] = [0.0, 0.0, 0.0, 0.0, 4.0, 4.0, 4.0, 4.0, 0.0];
-        let mut sequencer = create_test_sequencer(SAMPLE_RATE);
+        let mut sequencer = create_test_sequencer();
 
         let output_info = create_output_info(SAMPLE_RATE, EXPECTED_DATA.len());
 
@@ -467,7 +467,7 @@ mod tests {
     fn test_playing_all_steps_skip() {
         const SAMPLE_RATE: usize = 9;
         const EXPECTED_DATA: [f32; 9] = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
-        let mut sequencer = create_test_sequencer(SAMPLE_RATE);
+        let mut sequencer = create_test_sequencer();
 
         let output_info = create_output_info(SAMPLE_RATE, EXPECTED_DATA.len());
 

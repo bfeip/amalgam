@@ -7,11 +7,11 @@ use std::io;
 use super::super::error::*;
 use super::parse_variable_length;
 use self::channel::MidiChannelEvent;
-use self::system::MidiSystemEvent;
-use self::meta::MidiMetaEvent;
+use self::system::SystemEvent;
+use self::meta::MetaEvent;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub enum MidiEventType {
+pub enum EventType {
     NoteOff           = 0x8,
     NoteOn            = 0x9,
     NoteAftertouch    = 0xA,
@@ -22,17 +22,17 @@ pub enum MidiEventType {
     MetaOrSystem      = 0xF
 }
 
-impl MidiEventType {
+impl EventType {
     pub fn from_nybble(nybble: u8) -> MidiResult<Self> {
         let event_type = match nybble & 0xF {
-            0x8 => MidiEventType::NoteOff,
-            0x9 => MidiEventType::NoteOn,
-            0xA => MidiEventType::NoteAftertouch,
-            0xB => MidiEventType::Controller,
-            0xC => MidiEventType::ProgramChange,
-            0xD => MidiEventType::ChannelAftertouch,
-            0xE => MidiEventType::PitchBend,
-            0xF => MidiEventType::MetaOrSystem,
+            0x8 => EventType::NoteOff,
+            0x9 => EventType::NoteOn,
+            0xA => EventType::NoteAftertouch,
+            0xB => EventType::Controller,
+            0xC => EventType::ProgramChange,
+            0xD => EventType::ChannelAftertouch,
+            0xE => EventType::PitchBend,
+            0xF => EventType::MetaOrSystem,
             _   => {
                 let msg = format!("Unknown MIDI event type {:#03x}", nybble);
                 return Err(MidiError::new(&msg))
@@ -43,32 +43,32 @@ impl MidiEventType {
 
     pub fn to_byte(&self) -> u8 {
         match self {
-            MidiEventType::NoteOff           => 0x08,
-            MidiEventType::NoteOn            => 0x09,
-            MidiEventType::NoteAftertouch    => 0x0A,
-            MidiEventType::Controller        => 0x0B,
-            MidiEventType::ProgramChange     => 0x0C,
-            MidiEventType::ChannelAftertouch => 0x0D,
-            MidiEventType::PitchBend         => 0x0E,
-            MidiEventType::MetaOrSystem      => 0x0F
+            EventType::NoteOff           => 0x08,
+            EventType::NoteOn            => 0x09,
+            EventType::NoteAftertouch    => 0x0A,
+            EventType::Controller        => 0x0B,
+            EventType::ProgramChange     => 0x0C,
+            EventType::ChannelAftertouch => 0x0D,
+            EventType::PitchBend         => 0x0E,
+            EventType::MetaOrSystem      => 0x0F
         }
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum MidiEventBody {
+pub enum EventBody {
     Channel(MidiChannelEvent),
-    Meta(MidiMetaEvent),
-    System(MidiSystemEvent)
+    Meta(MetaEvent),
+    System(SystemEvent)
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct MidiEvent {
+pub struct Event {
     delta_time: usize,
-    inner_event: MidiEventBody
+    event_body: EventBody
 }
 
-impl MidiEvent {
+impl Event {
     pub fn parse<T: io::Read>(mut midi_stream: T, divided_event_bytes: &mut Vec<u8>) -> MidiResult<Self> {
         let delta_time = match parse_variable_length(&mut midi_stream) {
             Ok(delta_time) => delta_time,
@@ -80,7 +80,7 @@ impl MidiEvent {
     
         let mut event_type_and_channel_byte: [u8; 1] = [0; 1];
         read_with_eof_check!(midi_stream, &mut event_type_and_channel_byte); 
-        let event_type = match MidiEventType::from_nybble(event_type_and_channel_byte[0] >> 4) {
+        let event_type = match EventType::from_nybble(event_type_and_channel_byte[0] >> 4) {
             Ok(event_type) => event_type,
             Err(err) => {
                 let msg = format!("Failed to get event type from nybble: {}", err);
@@ -90,7 +90,7 @@ impl MidiEvent {
         let midi_channel = event_type_and_channel_byte[0] & 0xF;
     
         let inner_event = match event_type {
-            MidiEventType::MetaOrSystem => {
+            EventType::MetaOrSystem => {
                 match Self::parse_meta_or_system_event(
                     midi_stream, event_type_and_channel_byte[0], divided_event_bytes
                 ) {
@@ -104,7 +104,7 @@ impl MidiEvent {
             _ => {
                 let event_result = MidiChannelEvent::parse(midi_stream, event_type, midi_channel);
                 match event_result {
-                    Ok(event) => MidiEventBody::Channel(event),
+                    Ok(event) => EventBody::Channel(event),
                     Err(err) => {
                         let msg = format!("Failed to parse channel event: {}", err);
                         return Err(MidiError::new(&msg));
@@ -113,17 +113,17 @@ impl MidiEvent {
             }
         };
 
-        Ok(MidiEvent { delta_time, inner_event })
+        Ok(Event { delta_time, event_body: inner_event })
     }
     
     
     fn parse_meta_or_system_event<T: io::Read>(
         midi_stream: T, event_type_and_channel_byte: u8, divided_event_bytes: &mut Vec<u8>
-    ) -> MidiResult<MidiEventBody> {
+    ) -> MidiResult<EventBody> {
         match event_type_and_channel_byte {
             0xFF => {
-                match MidiMetaEvent::parse(midi_stream) {
-                    Ok(meta_event) => return Ok(MidiEventBody::Meta(meta_event)),
+                match MetaEvent::parse(midi_stream) {
+                    Ok(meta_event) => return Ok(EventBody::Meta(meta_event)),
                     Err(err) => {
                         let msg = format!("Failed to parse meta event: {}", err);
                         return Err(MidiError::new(&msg));
@@ -131,8 +131,8 @@ impl MidiEvent {
                 };
             },
             0xF7 | 0xF0 => {
-                match MidiSystemEvent::parse(midi_stream, event_type_and_channel_byte, divided_event_bytes) {
-                    Ok(system_event) => return Ok(MidiEventBody::System(system_event)),
+                match SystemEvent::parse(midi_stream, event_type_and_channel_byte, divided_event_bytes) {
+                    Ok(system_event) => return Ok(EventBody::System(system_event)),
                     Err(err) => {
                         let msg = format!("Failed to parse system event: {}", err);
                         return Err(MidiError::new(&msg));
@@ -153,8 +153,8 @@ impl MidiEvent {
         self.delta_time
     }
 
-    pub fn get_event_body(&self) -> &MidiEventBody {
-        &self.inner_event
+    pub fn get_event_body(&self) -> &EventBody {
+        &self.event_body
     }
 }
 
@@ -164,10 +164,10 @@ mod tests {
 
     #[test]
     fn parse_note_off() {
-        let expected_event = MidiEvent {
+        let expected_event = Event {
             delta_time: 42,
-            inner_event: MidiEventBody::Channel(
-                MidiChannelEvent::new(8, channel::MidiChannelEventBody::NoteOff {
+            event_body: EventBody::Channel(
+                MidiChannelEvent::new(8, channel::ChannelEventBody::NoteOff {
                     note: 1,
                     velocity: 2
                 })
@@ -175,7 +175,7 @@ mod tests {
         };
 
         let bytes: &[u8] = &[42, 0x88, 1, 2];
-        let event = match MidiEvent::parse(bytes, &mut Vec::new()) {
+        let event = match Event::parse(bytes, &mut Vec::new()) {
             Ok(event) => event,
             Err(err) => {
                 panic!("Failed to parse event: {}", err);
@@ -186,10 +186,10 @@ mod tests {
 
     #[test]
     fn parse_note_on() {
-        let expected_event = MidiEvent {
+        let expected_event = Event {
             delta_time: 42,
-            inner_event: MidiEventBody::Channel(
-                MidiChannelEvent::new(8, channel::MidiChannelEventBody::NoteOn {
+            event_body: EventBody::Channel(
+                MidiChannelEvent::new(8, channel::ChannelEventBody::NoteOn {
                     note: 1,
                     velocity: 2
                 })
@@ -197,7 +197,7 @@ mod tests {
         };
 
         let bytes: &[u8] = &[42, 0x98, 1, 2];
-        let event = match MidiEvent::parse(bytes, &mut Vec::new()) {
+        let event = match Event::parse(bytes, &mut Vec::new()) {
             Ok(event) => event,
             Err(err) => {
                 panic!("Failed to parse event: {}", err);
@@ -208,10 +208,10 @@ mod tests {
 
     #[test]
     fn parse_note_aftertouch() {
-        let expected_event = MidiEvent {
+        let expected_event = Event {
             delta_time: 42,
-            inner_event: MidiEventBody::Channel(
-                MidiChannelEvent::new(8, channel::MidiChannelEventBody::NoteAftertouch {
+            event_body: EventBody::Channel(
+                MidiChannelEvent::new(8, channel::ChannelEventBody::NoteAftertouch {
                     note: 1,
                     amount: 2
                 })
@@ -219,7 +219,7 @@ mod tests {
         };
 
         let bytes: &[u8] = &[42, 0xA8, 1, 2];
-        let event = match MidiEvent::parse(bytes, &mut Vec::new()) {
+        let event = match Event::parse(bytes, &mut Vec::new()) {
             Ok(event) => event,
             Err(err) => {
                 panic!("Failed to parse event: {}", err);
@@ -230,18 +230,18 @@ mod tests {
 
     #[test]
     fn parse_controller() {
-        let expected_event = MidiEvent {
+        let expected_event = Event {
             delta_time: 42,
-            inner_event: MidiEventBody::Channel(
-                MidiChannelEvent::new(8, channel::MidiChannelEventBody::Controller {
-                    controller_event: channel::MidiControllerEvent::Modulation,
+            event_body: EventBody::Channel(
+                MidiChannelEvent::new(8, channel::ChannelEventBody::Controller {
+                    controller_event: channel::ControllerEvent::Modulation,
                     value: 2
                 })
             )
         };
 
         let bytes: &[u8] = &[42, 0xB8, 1, 2];
-        let event = match MidiEvent::parse(bytes, &mut Vec::new()) {
+        let event = match Event::parse(bytes, &mut Vec::new()) {
             Ok(event) => event,
             Err(err) => {
                 panic!("Failed to parse event: {}", err);
@@ -252,17 +252,17 @@ mod tests {
 
     #[test]
     fn parse_program_change() {
-        let expected_event = MidiEvent {
+        let expected_event = Event {
             delta_time: 42,
-            inner_event: MidiEventBody::Channel(
-                MidiChannelEvent::new(8, channel::MidiChannelEventBody::ProgramChange {
+            event_body: EventBody::Channel(
+                MidiChannelEvent::new(8, channel::ChannelEventBody::ProgramChange {
                     program_number: 1
                 })
             )
         };
 
         let bytes: &[u8] = &[42, 0xC8, 1, 2];
-        let event = match MidiEvent::parse(bytes, &mut Vec::new()) {
+        let event = match Event::parse(bytes, &mut Vec::new()) {
             Ok(event) => event,
             Err(err) => {
                 panic!("Failed to parse event: {}", err);
@@ -273,17 +273,17 @@ mod tests {
 
     #[test]
     fn parse_channel_aftertouch() {
-        let expected_event = MidiEvent {
+        let expected_event = Event {
             delta_time: 42,
-            inner_event: MidiEventBody::Channel(
-                MidiChannelEvent::new(8, channel::MidiChannelEventBody::ChannelAftertouch {
+            event_body: EventBody::Channel(
+                MidiChannelEvent::new(8, channel::ChannelEventBody::ChannelAftertouch {
                     amount: 1
                 })
             )
         };
 
         let bytes: &[u8] = &[42, 0xD8, 1, 2];
-        let event = match MidiEvent::parse(bytes, &mut Vec::new()) {
+        let event = match Event::parse(bytes, &mut Vec::new()) {
             Ok(event) => event,
             Err(err) => {
                 panic!("Failed to parse event: {}", err);
@@ -294,17 +294,17 @@ mod tests {
 
     #[test]
     fn parse_pitch_bend() {
-        let expected_event = MidiEvent {
+        let expected_event = Event {
             delta_time: 42,
-            inner_event: MidiEventBody::Channel(
-                MidiChannelEvent::new(8, channel::MidiChannelEventBody::PitchBend {
+            event_body: EventBody::Channel(
+                MidiChannelEvent::new(8, channel::ChannelEventBody::PitchBend {
                     value: 0x3FFF
                 })
             )
         };
 
         let bytes: &[u8] = &[42, 0xE8, 0x7F, 0x7F];
-        let event = match MidiEvent::parse(bytes, &mut Vec::new()) {
+        let event = match Event::parse(bytes, &mut Vec::new()) {
             Ok(event) => event,
             Err(err) => {
                 panic!("Failed to parse event: {}", err);
@@ -315,15 +315,15 @@ mod tests {
 
     #[test]
     fn parse_system() {
-        let expected_event = MidiEvent {
+        let expected_event = Event {
             delta_time: 0,
-            inner_event: MidiEventBody::System(
-                MidiSystemEvent::Normal(vec![1, 2])
+            event_body: EventBody::System(
+                SystemEvent::Normal(vec![1, 2])
             )
         };
 
         let bytes: &[u8] = &[0, 0xF0, 3, 1, 2, 0xF7];
-        let event = match MidiEvent::parse(bytes, &mut Vec::new()) {
+        let event = match Event::parse(bytes, &mut Vec::new()) {
             Ok(event) => event,
             Err(err) => {
                 panic!("Failed to parse event: {}", err);
@@ -334,13 +334,13 @@ mod tests {
 
     #[test]
     fn parse_meta() {
-        let expected_event = MidiEvent {
+        let expected_event = Event {
             delta_time: 0,
-            inner_event: MidiEventBody::Meta(MidiMetaEvent::EndOfTrack)
+            event_body: EventBody::Meta(MetaEvent::EndOfTrack)
         };
 
         let bytes: &[u8] = &[0, 0xFF, 0x2F, 0];
-        let event = match MidiEvent::parse(bytes, &mut Vec::new()) {
+        let event = match Event::parse(bytes, &mut Vec::new()) {
             Ok(event) => event,
             Err(err) => {
                 panic!("Failed to parse event: {}", err);

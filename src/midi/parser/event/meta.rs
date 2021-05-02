@@ -2,7 +2,7 @@ use std::io;
 use super::super::{parse_variable_length, parse_string};
 use crate::midi::error::*;
 
-pub enum MidiMetaEventType {
+pub enum MetaEventType {
     SequenceNumber,
     TextEvent,
     CopyrightNotice,
@@ -20,24 +20,24 @@ pub enum MidiMetaEventType {
     SequencerSpecific
 }
 
-impl MidiMetaEventType {
+impl MetaEventType {
     pub fn from_byte(byte: u8) -> MidiResult<Self> {
         let event_type = match byte {
-            0x00 => MidiMetaEventType::SequenceNumber,
-            0x01 => MidiMetaEventType::TextEvent,
-            0x02 => MidiMetaEventType::CopyrightNotice,
-            0x03 => MidiMetaEventType::SequenceOrTrackName,
-            0x04 => MidiMetaEventType::InstrumentName,
-            0x05 => MidiMetaEventType::Lyrics,
-            0x06 => MidiMetaEventType::Marker,
-            0x07 => MidiMetaEventType::CuePoint,
-            0x20 => MidiMetaEventType::MidiChannelPrefix,
-            0x2F => MidiMetaEventType::EndOfTrack,
-            0x51 => MidiMetaEventType::SetTempo,
-            0x54 => MidiMetaEventType::SmpteOffset,
-            0x58 => MidiMetaEventType::TimeSignature,
-            0x59 => MidiMetaEventType::KeySignature,
-            0x7F => MidiMetaEventType::SequencerSpecific,
+            0x00 => MetaEventType::SequenceNumber,
+            0x01 => MetaEventType::TextEvent,
+            0x02 => MetaEventType::CopyrightNotice,
+            0x03 => MetaEventType::SequenceOrTrackName,
+            0x04 => MetaEventType::InstrumentName,
+            0x05 => MetaEventType::Lyrics,
+            0x06 => MetaEventType::Marker,
+            0x07 => MetaEventType::CuePoint,
+            0x20 => MetaEventType::MidiChannelPrefix,
+            0x2F => MetaEventType::EndOfTrack,
+            0x51 => MetaEventType::SetTempo,
+            0x54 => MetaEventType::SmpteOffset,
+            0x58 => MetaEventType::TimeSignature,
+            0x59 => MetaEventType::KeySignature,
+            0x7F => MetaEventType::SequencerSpecific,
             _ => {
                 let msg = format!("Unknown MIDI event type {:#04x}", byte);
                 return Err(MidiError::new(&msg));
@@ -48,27 +48,27 @@ impl MidiMetaEventType {
 
     pub fn to_byte(&self) -> u8 {
         match self {
-            MidiMetaEventType::SequenceNumber      => 0x00,
-            MidiMetaEventType::TextEvent           => 0x01,
-            MidiMetaEventType::CopyrightNotice     => 0x02,
-            MidiMetaEventType::SequenceOrTrackName => 0x03,
-            MidiMetaEventType::InstrumentName      => 0x04,
-            MidiMetaEventType::Lyrics              => 0x05,
-            MidiMetaEventType::Marker              => 0x06,
-            MidiMetaEventType::CuePoint            => 0x07,
-            MidiMetaEventType::MidiChannelPrefix   => 0x20,
-            MidiMetaEventType::EndOfTrack          => 0x2F,
-            MidiMetaEventType::SetTempo            => 0x51,
-            MidiMetaEventType::SmpteOffset         => 0x54,
-            MidiMetaEventType::TimeSignature       => 0x58,
-            MidiMetaEventType::KeySignature        => 0x59,
-            MidiMetaEventType::SequencerSpecific   => 0x7F
+            MetaEventType::SequenceNumber      => 0x00,
+            MetaEventType::TextEvent           => 0x01,
+            MetaEventType::CopyrightNotice     => 0x02,
+            MetaEventType::SequenceOrTrackName => 0x03,
+            MetaEventType::InstrumentName      => 0x04,
+            MetaEventType::Lyrics              => 0x05,
+            MetaEventType::Marker              => 0x06,
+            MetaEventType::CuePoint            => 0x07,
+            MetaEventType::MidiChannelPrefix   => 0x20,
+            MetaEventType::EndOfTrack          => 0x2F,
+            MetaEventType::SetTempo            => 0x51,
+            MetaEventType::SmpteOffset         => 0x54,
+            MetaEventType::TimeSignature       => 0x58,
+            MetaEventType::KeySignature        => 0x59,
+            MetaEventType::SequencerSpecific   => 0x7F
         }
     }
 }
 
 #[derive(PartialEq, Debug, Clone)]
-pub enum MidiMetaEvent {
+pub enum MetaEvent {
     SequenceNumber { number: u16 },
     TextEvent { text: String },
     CopyrightNotice { text: String },
@@ -86,8 +86,8 @@ pub enum MidiMetaEvent {
     SequencerSpecific { data: usize }
 }
 
-impl MidiMetaEvent {
-    pub fn parse<T: io::Read>(mut midi_stream: T) -> MidiResult<MidiMetaEvent> {
+impl MetaEvent {
+    pub fn parse<T: io::Read>(mut midi_stream: T) -> MidiResult<MetaEvent> {
         let mut meta_event_type_byte: [u8; 1] = [0; 1];
         read_with_eof_check!(midi_stream, &mut meta_event_type_byte);
         
@@ -99,7 +99,7 @@ impl MidiMetaEvent {
             }
         };
     
-        let meta_event_type = match MidiMetaEventType::from_byte(meta_event_type_byte[0]) {
+        let meta_event_type = match MetaEventType::from_byte(meta_event_type_byte[0]) {
             Ok(meta_event_type) => meta_event_type,
             Err(err) => {
                 let msg = format!("Failed to get meta event type: {}", err);
@@ -107,14 +107,14 @@ impl MidiMetaEvent {
             }
         };
         match meta_event_type {
-            MidiMetaEventType::SequenceNumber => {
+            MetaEventType::SequenceNumber => {
                 let mut bytes: [u8; 2] = [0; 2];
                 read_with_eof_check!(midi_stream, &mut bytes);
                 let number = u16::from_be_bytes(bytes);
-                Ok(MidiMetaEvent::SequenceNumber{ number })
+                Ok(MetaEvent::SequenceNumber{ number })
             },
     
-            MidiMetaEventType::TextEvent => {
+            MetaEventType::TextEvent => {
                 let text = match parse_string(midi_stream, size) {
                     Ok(text) => text,
                     Err(err) => {
@@ -124,10 +124,10 @@ impl MidiMetaEvent {
                         return Err(MidiError::new(&msg))
                     }
                 };
-                Ok(MidiMetaEvent::TextEvent{ text })
+                Ok(MetaEvent::TextEvent{ text })
             },
     
-            MidiMetaEventType::CopyrightNotice => {
+            MetaEventType::CopyrightNotice => {
                 let text = match parse_string(midi_stream, size) {
                     Ok(text) => text,
                     Err(err) => {
@@ -137,10 +137,10 @@ impl MidiMetaEvent {
                         return Err(MidiError::new(&msg))
                     }
                 };
-                Ok(MidiMetaEvent::CopyrightNotice{ text })
+                Ok(MetaEvent::CopyrightNotice{ text })
             },
     
-            MidiMetaEventType::SequenceOrTrackName => {
+            MetaEventType::SequenceOrTrackName => {
                 let text = match parse_string(midi_stream, size) {
                     Ok(text) => text,
                     Err(err) => {
@@ -150,10 +150,10 @@ impl MidiMetaEvent {
                         return Err(MidiError::new(&msg))
                     }
                 };
-                Ok(MidiMetaEvent::SequenceOrTrackName{ text })
+                Ok(MetaEvent::SequenceOrTrackName{ text })
             },
     
-            MidiMetaEventType::InstrumentName => {
+            MetaEventType::InstrumentName => {
                 let text = match parse_string(midi_stream, size) {
                     Ok(text) => text,
                     Err(err) => {
@@ -163,10 +163,10 @@ impl MidiMetaEvent {
                         return Err(MidiError::new(&msg))
                     }
                 };
-                Ok(MidiMetaEvent::InstrumentName{ text })
+                Ok(MetaEvent::InstrumentName{ text })
             },
     
-            MidiMetaEventType::Lyrics => {
+            MetaEventType::Lyrics => {
                 let text = match parse_string(midi_stream, size) {
                     Ok(text) => text,
                     Err(err) => {
@@ -176,10 +176,10 @@ impl MidiMetaEvent {
                         return Err(MidiError::new(&msg))
                     }
                 };
-                Ok(MidiMetaEvent::Lyrics{ text })
+                Ok(MetaEvent::Lyrics{ text })
             },
     
-            MidiMetaEventType::Marker => {
+            MetaEventType::Marker => {
                 let text = match parse_string(midi_stream, size) {
                     Ok(text) => text,
                     Err(err) => {
@@ -189,10 +189,10 @@ impl MidiMetaEvent {
                         return Err(MidiError::new(&msg))
                     }
                 };
-                Ok(MidiMetaEvent::Marker{ text })
+                Ok(MetaEvent::Marker{ text })
             },
     
-            MidiMetaEventType::CuePoint => {
+            MetaEventType::CuePoint => {
                 let text = match parse_string(midi_stream, size) {
                     Ok(text) => text,
                     Err(err) => {
@@ -202,31 +202,31 @@ impl MidiMetaEvent {
                         return Err(MidiError::new(&msg))
                     }
                 };
-                Ok(MidiMetaEvent::CuePoint{ text })
+                Ok(MetaEvent::CuePoint{ text })
             },
     
-            MidiMetaEventType::MidiChannelPrefix => {
+            MetaEventType::MidiChannelPrefix => {
                 let mut channel_byte: [u8; 1] = [0; 1];
                 read_with_eof_check!(midi_stream, &mut channel_byte);
-                Ok(MidiMetaEvent::MidiChannelPrefix{ channel: channel_byte[0] })
+                Ok(MetaEvent::MidiChannelPrefix{ channel: channel_byte[0] })
             },
     
-            MidiMetaEventType::EndOfTrack => Ok(MidiMetaEvent::EndOfTrack),
+            MetaEventType::EndOfTrack => Ok(MetaEvent::EndOfTrack),
     
-            MidiMetaEventType::SetTempo => {
+            MetaEventType::SetTempo => {
                 // Tempo is represented by 3 bytes in midi but we need 4 bytes to make a u32 so we just split off the
                 // first byte that'll always be zero
                 let mut tempo_u32_bytes: [u8; 4] = [0; 4];
                 let (_zero_byte, mut tempo_bytes) = tempo_u32_bytes.split_first_mut().unwrap();
                 read_with_eof_check!(midi_stream, &mut tempo_bytes);
                 let tempo = u32::from_be_bytes(tempo_u32_bytes);
-                Ok(MidiMetaEvent::SetTempo{ tempo })
+                Ok(MetaEvent::SetTempo{ tempo })
             },
     
-            MidiMetaEventType::SmpteOffset => {
+            MetaEventType::SmpteOffset => {
                 let mut bytes: [u8; 5] = [0; 5];
                 read_with_eof_check!(midi_stream, &mut bytes);
-                Ok(MidiMetaEvent::SmpteOffset {
+                Ok(MetaEvent::SmpteOffset {
                     hour: bytes[0],
                     min: bytes[1],
                     sec: bytes[2],
@@ -235,10 +235,10 @@ impl MidiMetaEvent {
                 })
             },
     
-            MidiMetaEventType::TimeSignature => {
+            MetaEventType::TimeSignature => {
                 let mut bytes: [u8; 4] = [0; 4];
                 read_with_eof_check!(midi_stream, &mut bytes);
-                Ok(MidiMetaEvent::TimeSignature {
+                Ok(MetaEvent::TimeSignature {
                     numerator: bytes[0],
                     denominator: bytes[1],
                     metro: bytes[2],
@@ -246,16 +246,16 @@ impl MidiMetaEvent {
                 })
             },
     
-            MidiMetaEventType::KeySignature => {
+            MetaEventType::KeySignature => {
                 let mut bytes: [u8; 2] = [0; 2];
                 read_with_eof_check!(midi_stream, &mut bytes);
-                Ok(MidiMetaEvent::KeySignature {
+                Ok(MetaEvent::KeySignature {
                     key: bytes[0],
                     scale: bytes[1]
                 })
             }
     
-            MidiMetaEventType::SequencerSpecific => {
+            MetaEventType::SequencerSpecific => {
                 // WRONG. This is not variable length. it's just a bunch of bytes until size is fulfilled
                 let data = match parse_variable_length(midi_stream) {
                     Ok(data) => data,
@@ -264,7 +264,7 @@ impl MidiMetaEvent {
                         return Err(MidiError::new(&msg));
                     }
                 };
-                Ok(MidiMetaEvent::SequencerSpecific{ data })
+                Ok(MetaEvent::SequencerSpecific{ data })
             }
         }
     }
@@ -276,147 +276,147 @@ mod tests {
 
     #[test]
     fn parse_sequence_number() {
-        let expected_event = MidiMetaEvent::SequenceNumber{ number: 8256 };
-        let type_byte = MidiMetaEventType::SequenceNumber.to_byte();
+        let expected_event = MetaEvent::SequenceNumber{ number: 8256 };
+        let type_byte = MetaEventType::SequenceNumber.to_byte();
         let mut bytes: &[u8] = &[type_byte, 2, 32, 64];
-        let event = MidiMetaEvent::parse(&mut bytes).expect("Failed to parse");
+        let event = MetaEvent::parse(&mut bytes).expect("Failed to parse");
         assert_eq!(event, expected_event, "Event does not mach expected");
     }
 
     #[test]
     fn parse_text_event() {
-        let expected_event = MidiMetaEvent::TextEvent{ text: "text".to_string() };
-        let type_byte = MidiMetaEventType::TextEvent.to_byte();
+        let expected_event = MetaEvent::TextEvent{ text: "text".to_string() };
+        let type_byte = MetaEventType::TextEvent.to_byte();
         let mut bytes: &[u8] = &[type_byte, 4, 't' as u8, 'e' as u8, 'x' as u8, 't' as u8];
-        let event = MidiMetaEvent::parse(&mut bytes).expect("Failed to parse");
+        let event = MetaEvent::parse(&mut bytes).expect("Failed to parse");
         assert_eq!(event, expected_event, "Event does not mach expected");
     }
 
     #[test]
     fn parse_copyright_notice() {
-        let expected_event = MidiMetaEvent::CopyrightNotice{ text: "text".to_string() };
-        let type_byte = MidiMetaEventType::CopyrightNotice.to_byte();
+        let expected_event = MetaEvent::CopyrightNotice{ text: "text".to_string() };
+        let type_byte = MetaEventType::CopyrightNotice.to_byte();
         let mut bytes: &[u8] = &[type_byte, 4, 't' as u8, 'e' as u8, 'x' as u8, 't' as u8];
-        let event = MidiMetaEvent::parse(&mut bytes).expect("Failed to parse");
+        let event = MetaEvent::parse(&mut bytes).expect("Failed to parse");
         assert_eq!(event, expected_event, "Event does not mach expected");
     }
 
     #[test]
     fn parse_sequence_or_track_name() {
-        let expected_event = MidiMetaEvent::SequenceOrTrackName{ text: "text".to_string() };
-        let type_byte = MidiMetaEventType::SequenceOrTrackName.to_byte();
+        let expected_event = MetaEvent::SequenceOrTrackName{ text: "text".to_string() };
+        let type_byte = MetaEventType::SequenceOrTrackName.to_byte();
         let mut bytes: &[u8] = &[type_byte, 4, 't' as u8, 'e' as u8, 'x' as u8, 't' as u8];
-        let event = MidiMetaEvent::parse(&mut bytes).expect("Failed to parse");
+        let event = MetaEvent::parse(&mut bytes).expect("Failed to parse");
         assert_eq!(event, expected_event, "Event does not mach expected");
     }
 
     #[test]
     fn parse_instrument_name() {
-        let expected_event = MidiMetaEvent::InstrumentName{ text: "text".to_string() };
-        let type_byte = MidiMetaEventType::InstrumentName.to_byte();
+        let expected_event = MetaEvent::InstrumentName{ text: "text".to_string() };
+        let type_byte = MetaEventType::InstrumentName.to_byte();
         let mut bytes: &[u8] = &[type_byte, 4, 't' as u8, 'e' as u8, 'x' as u8, 't' as u8];
-        let event = MidiMetaEvent::parse(&mut bytes).expect("Failed to parse");
+        let event = MetaEvent::parse(&mut bytes).expect("Failed to parse");
         assert_eq!(event, expected_event, "Event does not mach expected");
     }
 
     #[test]
     fn parse_lyrics() {
-        let expected_event = MidiMetaEvent::Lyrics{ text: "text".to_string() };
-        let type_byte = MidiMetaEventType::Lyrics.to_byte();
+        let expected_event = MetaEvent::Lyrics{ text: "text".to_string() };
+        let type_byte = MetaEventType::Lyrics.to_byte();
         let mut bytes: &[u8] = &[type_byte, 4, 't' as u8, 'e' as u8, 'x' as u8, 't' as u8];
-        let event = MidiMetaEvent::parse(&mut bytes).expect("Failed to parse");
+        let event = MetaEvent::parse(&mut bytes).expect("Failed to parse");
         assert_eq!(event, expected_event, "Event does not mach expected");
     }
 
     #[test]
     fn parse_marker() {
-        let expected_event = MidiMetaEvent::Marker{ text: "text".to_string() };
-        let type_byte = MidiMetaEventType::Marker.to_byte();
+        let expected_event = MetaEvent::Marker{ text: "text".to_string() };
+        let type_byte = MetaEventType::Marker.to_byte();
         let mut bytes: &[u8] = &[type_byte, 4, 't' as u8, 'e' as u8, 'x' as u8, 't' as u8];
-        let event = MidiMetaEvent::parse(&mut bytes).expect("Failed to parse");
+        let event = MetaEvent::parse(&mut bytes).expect("Failed to parse");
         assert_eq!(event, expected_event, "Event does not mach expected");
     }
 
     #[test]
     fn parse_cue_point() {
-        let expected_event = MidiMetaEvent::CuePoint{ text: "text".to_string() };
-        let type_byte = MidiMetaEventType::CuePoint.to_byte();
+        let expected_event = MetaEvent::CuePoint{ text: "text".to_string() };
+        let type_byte = MetaEventType::CuePoint.to_byte();
         let mut bytes: &[u8] = &[type_byte, 4, 't' as u8, 'e' as u8, 'x' as u8, 't' as u8];
-        let event = MidiMetaEvent::parse(&mut bytes).expect("Failed to parse");
+        let event = MetaEvent::parse(&mut bytes).expect("Failed to parse");
         assert_eq!(event, expected_event, "Event does not mach expected");
     }
 
     #[test]
     fn parse_midi_channel_prefix() {
-        let expected_event = MidiMetaEvent::MidiChannelPrefix{ channel: 42 };
-        let type_byte = MidiMetaEventType::MidiChannelPrefix.to_byte();
+        let expected_event = MetaEvent::MidiChannelPrefix{ channel: 42 };
+        let type_byte = MetaEventType::MidiChannelPrefix.to_byte();
         let mut bytes: &[u8] = &[type_byte, 1, 42];
-        let event = MidiMetaEvent::parse(&mut bytes).expect("Failed to parse");
+        let event = MetaEvent::parse(&mut bytes).expect("Failed to parse");
         assert_eq!(event, expected_event, "Event does not mach expected");
     }
 
     #[test]
     fn parse_end_of_track() {
-        let expected_event = MidiMetaEvent::EndOfTrack;
-        let type_byte = MidiMetaEventType::EndOfTrack.to_byte();
+        let expected_event = MetaEvent::EndOfTrack;
+        let type_byte = MetaEventType::EndOfTrack.to_byte();
         let mut bytes: &[u8] = &[type_byte, 0];
-        let event = MidiMetaEvent::parse(&mut bytes).expect("Failed to parse");
+        let event = MetaEvent::parse(&mut bytes).expect("Failed to parse");
         assert_eq!(event, expected_event, "Event does not mach expected");
     }
 
     #[test]
     fn parse_set_tempo() {
-        let expected_event = MidiMetaEvent::SetTempo{ tempo: 42 };
-        let type_byte = MidiMetaEventType::SetTempo.to_byte();
+        let expected_event = MetaEvent::SetTempo{ tempo: 42 };
+        let type_byte = MetaEventType::SetTempo.to_byte();
         let mut bytes: &[u8] = &[type_byte, 3, 0, 0, 42];
-        let event = MidiMetaEvent::parse(&mut bytes).expect("Failed to parse");
+        let event = MetaEvent::parse(&mut bytes).expect("Failed to parse");
         assert_eq!(event, expected_event, "Event does not mach expected");
     }
 
     #[test]
     fn parse_smpte_offset() {
-        let expected_event = MidiMetaEvent::SmpteOffset{ 
+        let expected_event = MetaEvent::SmpteOffset{ 
             hour: 1,
             min: 2,
             sec: 3,
             frame: 4,
             sub_frame: 5
         };
-        let type_byte = MidiMetaEventType::SmpteOffset.to_byte();
+        let type_byte = MetaEventType::SmpteOffset.to_byte();
         let mut bytes: &[u8] = &[type_byte, 5, 1, 2, 3, 4, 5];
-        let event = MidiMetaEvent::parse(&mut bytes).expect("Failed to parse");
+        let event = MetaEvent::parse(&mut bytes).expect("Failed to parse");
         assert_eq!(event, expected_event, "Event does not mach expected");
     }
 
     #[test]
     fn parse_time_signature() {
-        let expected_event = MidiMetaEvent::TimeSignature{ 
+        let expected_event = MetaEvent::TimeSignature{ 
             numerator: 1,
             denominator: 2,
             metro: 3,
             thirty_seconds: 4,
         };
-        let type_byte = MidiMetaEventType::TimeSignature.to_byte();
+        let type_byte = MetaEventType::TimeSignature.to_byte();
         let mut bytes: &[u8] = &[type_byte, 4, 1, 2, 3, 4];
-        let event = MidiMetaEvent::parse(&mut bytes).expect("Failed to parse");
+        let event = MetaEvent::parse(&mut bytes).expect("Failed to parse");
         assert_eq!(event, expected_event, "Event does not mach expected");
     }
 
     #[test]
     fn parse_key_signature() {
-        let expected_event = MidiMetaEvent::KeySignature{ key: 1, scale: 2 };
-        let type_byte = MidiMetaEventType::KeySignature.to_byte();
+        let expected_event = MetaEvent::KeySignature{ key: 1, scale: 2 };
+        let type_byte = MetaEventType::KeySignature.to_byte();
         let mut bytes: &[u8] = &[type_byte, 2, 1, 2];
-        let event = MidiMetaEvent::parse(&mut bytes).expect("Failed to parse");
+        let event = MetaEvent::parse(&mut bytes).expect("Failed to parse");
         assert_eq!(event, expected_event, "Event does not mach expected");
     }
 
     #[test]
     fn parse_sequencer_specific() {
-        let expected_event = MidiMetaEvent::SequencerSpecific{ data: 42 };
-        let type_byte = MidiMetaEventType::SequencerSpecific.to_byte();
+        let expected_event = MetaEvent::SequencerSpecific{ data: 42 };
+        let type_byte = MetaEventType::SequencerSpecific.to_byte();
         let mut bytes: &[u8] = &[type_byte, 1, 42];
-        let event = MidiMetaEvent::parse(&mut bytes).expect("Failed to parse");
+        let event = MetaEvent::parse(&mut bytes).expect("Failed to parse");
         assert_eq!(event, expected_event, "Event does not mach expected");
     }
 }

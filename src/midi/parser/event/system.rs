@@ -7,18 +7,18 @@ const NORMAL_TYPE_BYTE: u8 = 0xF0;
 const DIVIDED_OR_AUTH_TYPE_BYTE: u8 = 0xF7;
 
 #[derive(PartialEq, Debug, Clone)]
-pub enum MidiSystemEvent {
+pub enum SystemEvent {
     Normal(Vec<u8>),
     Divided(Vec<u8>),
     Authorization(Vec<u8>)
 }
 
-impl MidiSystemEvent {
+impl SystemEvent {
     pub fn parse<T: io::Read>(
         mut midi_stream: T,
         type_byte: u8,
         divided_bytes: &mut Vec<u8>
-    ) -> MidiResult<MidiSystemEvent> {
+    ) -> MidiResult<SystemEvent> {
         let size = match parse_variable_length(&mut midi_stream) {
             Ok(size) => size,
             Err(err) => {
@@ -40,12 +40,12 @@ impl MidiSystemEvent {
                 read_with_eof_check!(midi_stream, data_slice);
                 if *data.last().expect("Data is empty? But size isn't 0?") == 0xF7 {
                     data.pop(); // remove the 0xF7 byte that indicated the end
-                    return Ok(MidiSystemEvent::Normal(data));
+                    return Ok(SystemEvent::Normal(data));
                 }
                 // There's more coming later that we'll need to append to this
                 divided_bytes.clear();
                 divided_bytes.extend_from_slice(&data);
-                Ok(MidiSystemEvent::Divided(data))
+                Ok(SystemEvent::Divided(data))
             },
 
             DIVIDED_OR_AUTH_TYPE_BYTE => {
@@ -58,13 +58,13 @@ impl MidiSystemEvent {
                     divided_bytes.extend_from_slice(data_slice);
                     if *divided_bytes.last().expect("Static data is empty?") == 0xF7 {
                         divided_bytes.pop(); // remove the 0xF7 byte that indicated the end
-                        return Ok(MidiSystemEvent::Normal(divided_bytes.clone()));
+                        return Ok(SystemEvent::Normal(divided_bytes.clone()));
                     }
                     // There's even more
                     // TODO: We're passed a reference for divided bytes that we extend and then clone here.
                     // This is inefficent since the bytes in a divided event aren't even useful until
                     // the whole thing is completed.
-                    return Ok(MidiSystemEvent::Divided(divided_bytes.clone()))
+                    return Ok(SystemEvent::Divided(divided_bytes.clone()))
                 }
                 else {
                     // Authorization event
@@ -72,7 +72,7 @@ impl MidiSystemEvent {
                     event_data.resize(size, 0_u8);
                     let data_slice = &mut event_data;
                     read_with_eof_check!(midi_stream, data_slice);
-                    return Ok(MidiSystemEvent::Authorization(event_data))
+                    return Ok(SystemEvent::Authorization(event_data))
                 }
             }
             _ => {
@@ -89,10 +89,10 @@ mod tests {
 
     #[test]
     fn parse_normal() {
-        let expected_event: MidiSystemEvent = MidiSystemEvent::Normal(vec![42, 42, 42]);
+        let expected_event: SystemEvent = SystemEvent::Normal(vec![42, 42, 42]);
         let mut event_data: &[u8] = &[4, 42, 42, 42, 0xF7];
         let mut divided_bytes = Vec::new();
-        let event = MidiSystemEvent::parse(
+        let event = SystemEvent::parse(
             &mut event_data, NORMAL_TYPE_BYTE, &mut divided_bytes
         ).expect("Failed to parse");
         assert_eq!(event, expected_event, "Event did not match expected");
@@ -100,25 +100,25 @@ mod tests {
 
     #[test]
     fn parse_divided() {
-        let expected_first_event: MidiSystemEvent = MidiSystemEvent::Divided(vec![42]);
-        let expected_second_event: MidiSystemEvent = MidiSystemEvent::Divided(vec![42, 42]);
-        let expected_final_event: MidiSystemEvent = MidiSystemEvent::Normal(vec![42, 42, 42]);
+        let expected_first_event: SystemEvent = SystemEvent::Divided(vec![42]);
+        let expected_second_event: SystemEvent = SystemEvent::Divided(vec![42, 42]);
+        let expected_final_event: SystemEvent = SystemEvent::Normal(vec![42, 42, 42]);
         let mut divided_bytes = Vec::new();
 
         let mut event_data: &[u8] = &[1, 42];
-        let event = MidiSystemEvent::parse(
+        let event = SystemEvent::parse(
             &mut event_data, NORMAL_TYPE_BYTE, &mut divided_bytes
         ).expect("Failed to parse");
         assert_eq!(event, expected_first_event, "First event did not match expected");
 
         let mut event_data: &[u8] = &[1, 42];
-        let event = MidiSystemEvent::parse(
+        let event = SystemEvent::parse(
             &mut event_data, DIVIDED_OR_AUTH_TYPE_BYTE, &mut divided_bytes
         ).expect("Failed to parse");
         assert_eq!(event, expected_second_event, "Second event did not match expected");
 
         let mut event_data: &[u8] = &[2, 42, 0xF7];
-        let event = MidiSystemEvent::parse(
+        let event = SystemEvent::parse(
             &mut event_data, DIVIDED_OR_AUTH_TYPE_BYTE, &mut divided_bytes
         ).expect("Failed to parse");
         assert_eq!(event, expected_final_event, "Final event did not match expected");
@@ -126,10 +126,10 @@ mod tests {
 
     #[test]
     fn parse_auth() {
-        let expected_event: MidiSystemEvent = MidiSystemEvent::Authorization(vec![42, 42, 42]);
+        let expected_event: SystemEvent = SystemEvent::Authorization(vec![42, 42, 42]);
         let mut event_data: &[u8] = &[3, 42, 42, 42];
         let mut divided_bytes = Vec::new();
-        let event = MidiSystemEvent::parse(
+        let event = SystemEvent::parse(
             &mut event_data, DIVIDED_OR_AUTH_TYPE_BYTE, &mut divided_bytes
         ).expect("Failed to parse");
         assert_eq!(event, expected_event, "Event did not match expected");
