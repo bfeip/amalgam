@@ -1,6 +1,6 @@
 use super::error::{SynthResult, SynthError};
 use super::module::output::Output;
-use super::module::traits::{SignalOutputModule, OutputInfo};
+use super::module::traits::{SignalOutputModule, OutputInfo, OutputTimestamp};
 use super::output::{AudioOutput};
 use super::clock;
 
@@ -69,15 +69,16 @@ impl Synth {
 
         // Create a callback to pass to CPAL to output the audio. This'll get passed to a different thread that
         // will actually play the audio.
-        let output_callback = move |sample_buffer: &mut [T], _: &cpal::OutputCallbackInfo| {
+        let output_callback = move |sample_buffer: &mut [T], callback_info: &cpal::OutputCallbackInfo| {
             let buffer_length = sample_buffer.len();
             let mut f32_buffer = Vec::with_capacity(buffer_length);
             for _ in 0..buffer_length {
                 f32_buffer.push(0_f32);
             }
 
+            let timestamp = OutputTimestamp::new(callback_info.timestamp());
             let clock_values = sample_clock.get_range(buffer_length);
-            let output_info = OutputInfo::new(sample_rate, clock_values);
+            let output_info = OutputInfo::new(sample_rate, clock_values, timestamp);
 
             output_module.fill_output_buffer(&mut f32_buffer, &output_info);
             for i in 0..buffer_length {

@@ -266,14 +266,15 @@ impl SignalOutputModule for Sequencer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use super::super::oscillator;
+    use super::super::{traits, oscillator};
     use crate::prelude::*;
     use crate::clock;
 
     fn create_output_info(sample_rate: usize, buffer_size: usize) -> OutputInfo {
         let mut clock = clock::SampleClock::new(sample_rate);
         let clock_values = clock.get_range(buffer_size);
-        OutputInfo::new(sample_rate, clock_values)
+        let timestamp = traits::OutputTimestamp::empty();
+        OutputInfo::new(sample_rate, clock_values, timestamp)
     }
 
     fn create_test_sequencer() -> Sequencer {

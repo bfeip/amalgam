@@ -74,7 +74,7 @@ impl MidiData {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub enum TimeDivision {
     TicksPerBeat(u16),
     FramesPerSecond{ frames_per_second: u8, ticks_per_frame: u8}
@@ -179,8 +179,8 @@ impl HeaderChunk {
         header_chunk
     }
 
-    pub fn get_time_division(&self) -> &TimeDivision {
-        &self.time_division
+    pub fn get_time_division(&self) -> TimeDivision {
+        self.time_division
     }
 }
 

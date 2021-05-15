@@ -1,11 +1,27 @@
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub struct OutputTimestamp {
+    timestamp: Option<cpal::OutputStreamTimestamp>
+}
+
+impl OutputTimestamp {
+    pub fn new(timestamp: cpal::OutputStreamTimestamp) -> Self {
+        Self { timestamp: Some(timestamp) }
+    }
+
+    pub fn empty() -> Self {
+        Self { timestamp: None }
+    }
+}
+
 pub struct OutputInfo {
     pub sample_rate: usize,
-    pub current_sample_range: Vec<usize>
+    pub current_sample_range: Vec<usize>,
+    pub timestamp: OutputTimestamp
 }
 
 impl OutputInfo {
-    pub fn new(sample_rate: usize, current_sample_range: Vec<usize>) -> Self {
-        OutputInfo { sample_rate, current_sample_range }
+    pub fn new(sample_rate: usize, current_sample_range: Vec<usize>, timestamp: OutputTimestamp) -> Self {
+        OutputInfo { sample_rate, current_sample_range, timestamp }
     }
 }
 

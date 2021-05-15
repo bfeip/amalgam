@@ -132,8 +132,11 @@ impl SignalOutputModule for Mixer {
 
 #[cfg(test)]
 mod tests {
+    use traits::OutputTimestamp;
+
     use super::*;
     use super::super::oscillator;
+    use super::super::traits;
     use crate::clock;
 
     fn get_square_and_25_pulse_mixer_inputs() -> (MixerInput, MixerInput) {
@@ -168,7 +171,7 @@ mod tests {
         mixer.add_input(mixer_input_2);
 
         let clock_values = get_clock_values(SAMPLE_RATE, EXPECTED_DATA.len());
-        let output_info = OutputInfo::new(SAMPLE_RATE, clock_values);
+        let output_info = OutputInfo::new(SAMPLE_RATE, clock_values, OutputTimestamp::empty());
 
         let mut output_buffer = Vec::with_capacity(SAMPLE_RATE);
         output_buffer.resize(SAMPLE_RATE, 0.0);
@@ -196,7 +199,7 @@ mod tests {
         mixer.add_input(mixer_input_2);
         
         let clock_values = get_clock_values(SAMPLE_RATE, EXPECTED_DATA.len());
-        let output_info = OutputInfo::new(SAMPLE_RATE, clock_values);
+        let output_info = OutputInfo::new(SAMPLE_RATE, clock_values, OutputTimestamp::empty());
 
         let mut output_buffer = Vec::with_capacity(SAMPLE_RATE);
         output_buffer.resize(SAMPLE_RATE, 0.0);
@@ -224,7 +227,7 @@ mod tests {
         mixer.add_input(mixer_input_2);
 
         let clock_values = get_clock_values(SAMPLE_RATE, EXPECTED_DATA.len());
-        let output_info = OutputInfo::new(SAMPLE_RATE, clock_values);
+        let output_info = OutputInfo::new(SAMPLE_RATE, clock_values, OutputTimestamp::empty());
 
         let mut output_buffer = Vec::with_capacity(SAMPLE_RATE);
         output_buffer.resize(SAMPLE_RATE, 0.0);
@@ -251,7 +254,7 @@ mod tests {
         mixer.add_input(mixer_input_2);
 
         let clock_values = get_clock_values(SAMPLE_RATE, EXPECTED_DATA.len());
-        let output_info = OutputInfo::new(SAMPLE_RATE, clock_values);
+        let output_info = OutputInfo::new(SAMPLE_RATE, clock_values, OutputTimestamp::empty());
 
         let mut output_buffer = Vec::with_capacity(SAMPLE_RATE);
         output_buffer.resize(SAMPLE_RATE, 0.0);
