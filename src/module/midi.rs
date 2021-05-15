@@ -9,8 +9,8 @@ use midi_mono_note::MidiMonoNoteOutput;
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 
-pub struct MidiModuleBase<'data> {
-    data: midi::data::MidiData<'data>,
+pub struct MidiModuleBase {
+    data: midi::data::MidiData,
     track: usize,
     channel: usize,
 
@@ -22,7 +22,7 @@ pub struct MidiModuleBase<'data> {
     milliseconds_read: usize,
 }
 
-impl<'data> MidiModuleBase<'data> {
+impl MidiModuleBase {
     pub fn open<P: AsRef<std::path::Path>>(path: P) -> ModuleResult<Self> {
         let data = match midi::data::MidiData::from_file(path) {
             Ok(data) => data,
@@ -83,7 +83,7 @@ impl<'data> MidiModuleBase<'data> {
         }
     }
 
-    pub fn get_mono_note_output(midi_src_mutex_ptr: Arc<Mutex<Self>>) -> MidiMonoNoteOutput<'data> {
+    pub fn get_mono_note_output(midi_src_mutex_ptr: Arc<Mutex<Self>>) -> MidiMonoNoteOutput {
         MidiMonoNoteOutput::new(midi_src_mutex_ptr)
     }
 }

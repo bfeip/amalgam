@@ -5,7 +5,7 @@ use crate::midi;
 use std::{ops::DerefMut, sync::{Mutex, Arc}};
 use std::collections::HashSet;
 
-type MidiFileMutexPtr<'a> = Arc<Mutex<MidiModuleBase<'a>>>;
+type MidiFileMutexPtr = Arc<Mutex<MidiModuleBase>>;
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 enum MidiMonoNotePriority {
@@ -15,14 +15,14 @@ enum MidiMonoNotePriority {
     Last
 }
 
-pub struct MidiMonoNoteOutput<'midi_file> {
-    midi_source: MidiFileMutexPtr<'midi_file>,
+pub struct MidiMonoNoteOutput {
+    midi_source: MidiFileMutexPtr,
     priority: MidiMonoNotePriority,
     on_notes: Vec<u8>
 }
 
-impl<'midi_file> MidiMonoNoteOutput<'midi_file> {
-    pub fn new(midi_source: MidiFileMutexPtr<'midi_file>) -> Self {
+impl MidiMonoNoteOutput {
+    pub fn new(midi_source: MidiFileMutexPtr) -> Self {
         let priority = MidiMonoNotePriority::Last;
         let on_notes = Vec::new();
         Self { midi_source, priority, on_notes }

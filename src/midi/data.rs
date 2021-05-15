@@ -3,13 +3,12 @@ use super::error::*;
 
 use std::collections::HashSet;
 
-pub struct MidiData<'data> {
-    parser_data: parser::MidiData,
-    tracks: Vec<Track<'data>>,
+pub struct MidiData {
+    tracks: Vec<Track>,
     time_division: parser::TimeDivision
 }
 
-impl<'data> MidiData<'data> {
+impl MidiData {
     pub fn from_file<P: AsRef<std::path::Path>>(path: P) -> MidiResult<Self> {
         let parser_data = match parser::MidiData::from_file(path) {
             Ok(parser_data) => parser_data,
@@ -20,21 +19,20 @@ impl<'data> MidiData<'data> {
         };
 
         let time_division = parser_data.get_header().get_time_division();
-        let tracks = Vec::new();
+        let track_count = parser_data.get_track_count();
+        let tracks = Vec::with_capacity(track_count);
 
-        let ret = Self { parser_data, tracks, time_division };
+        let mut ret = Self { tracks, time_division };
 
-        let track_count = ret.parser_data.get_track_count();
-        let mut tracks = Vec::with_capacity(track_count);
-        for (i, parser_track) in ret.parser_data.iter_tracks().enumerate() {
+        for (i, parser_track) in parser_data.iter_tracks().enumerate() {
             let track = Track::from_track_chunk(parser_track, i);
-            tracks.push(track);
+            ret.tracks.push(track);
         }
 
         Ok(ret)
     }
 
-    pub fn get_tracks(&self) -> &Vec<Track<'data>> {
+    pub fn get_tracks(&self) -> &Vec<Track> {
         &self.tracks
     }
 
@@ -57,13 +55,13 @@ impl<'data> MidiData<'data> {
     }
 
     pub fn get_notes_delta(
-        &mut self,
+        &self,
         track_number: usize,
         channel_number: usize,
         start_time_milliseconds: usize, 
         end_time_milliseconds: usize
     ) -> MidiResult<NoteDelta> {
-        let track = match self.tracks.get_mut(track_number) {
+        let track = match self.tracks.get(track_number) {
             Some(track) => track,
             None => {
                 let msg = "Tried to get notes for non-existient track";
@@ -74,8 +72,7 @@ impl<'data> MidiData<'data> {
         // x milliseconds * y ticks
         // ------------------------ = number of ticks in x millsconds
         //     1000 milliseconds
-        let time_division = self.parser_data.get_header().get_time_division();
-        let ticks_per_second = track.ticks_per_second(time_division);
+        let ticks_per_second = track.ticks_per_second(self.time_division);
         let start_tick = start_time_milliseconds * ticks_per_second / 1000;
         let end_tick = end_time_milliseconds * ticks_per_second / 1000;
 
@@ -83,27 +80,27 @@ impl<'data> MidiData<'data> {
     }
 }
 
-pub struct Track<'data> {
+pub struct Track {
     track_number: usize,
-    track_name: &'data str,
+    track_name: String,
     sequence_number: Option<u16>,
-    instrument_name: &'data str,
+    instrument_name: String,
     tempo: u32,
-    channels: Vec<Channel<'data>>,
+    channels: Vec<Channel>,
 }
 
-impl<'data> Track<'data> {
-    fn from_track_chunk(track_chunk: &'data parser::TrackChunk, track_number: usize) -> Self{
+impl Track {
+    fn from_track_chunk(track_chunk: &parser::TrackChunk, track_number: usize) -> Self{
         let mut channels = Vec::with_capacity(16);
         for i in 0..channels.capacity() {
-            channels[i] = Channel::new(i as u8);
+            channels.push(Channel::new(i as u8));
         }
 
         let mut ret = Self {
             track_number,
-            track_name: "",
+            track_name: String::new(),
             sequence_number: None,
-            instrument_name: "",
+            instrument_name: String::new(),
             tempo: 120,
             channels
         };
@@ -128,12 +125,12 @@ impl<'data> Track<'data> {
                             ret.sequence_number = Some(*number);
                         }
                         MetaEvent::SequenceOrTrackName { text } => {
-                            ret.track_name = text;
+                            ret.track_name = text.to_string();
                         }
                         MetaEvent::InstrumentName { text } => {
                             match meta_event_channel_prefix {
                                 Some(channel) => ret.channels[channel].set_instrument_name(text),
-                                None => ret.instrument_name = text
+                                None => ret.instrument_name = text.to_string()
                             }
                         }
                         MetaEvent::MidiChannelPrefix { channel } => {
@@ -170,9 +167,9 @@ impl<'data> Track<'data> {
     }
 
     fn get_notes_delta(
-        &mut self, channel_number: usize, old_tick_position: usize, new_tick_position: usize
+        &self, channel_number: usize, old_tick_position: usize, new_tick_position: usize
     ) -> MidiResult<NoteDelta> {
-        let channel = match self.channels.get_mut(channel_number) {
+        let channel = match self.channels.get(channel_number) {
             Some(channel) => channel,
             None => {
                 let msg = "Tried to get notes for non-existent channel";
@@ -196,29 +193,26 @@ impl<'data> Track<'data> {
     }
 }
 
-struct Channel<'data> {
+struct Channel {
     number: u8,
-    instrument_name: &'data str,
+    instrument_name: String,
     note_events: Vec<NoteEvent>,
-    next_note_index: usize
 }
 
-impl<'data> Channel<'data> {
+impl Channel {
     fn new(number: u8) -> Self {
-        let instrument_name = "";
+        let instrument_name = String::new();
         let note_events = Vec::new();
-        let next_note_index = 0;
 
         Self {
             number,
             instrument_name,
-            note_events,
-            next_note_index
+            note_events
         }
     }
 
-    fn set_instrument_name(&mut self, instrument_name: &'data str) {
-        self.instrument_name = instrument_name;
+    fn set_instrument_name(&mut self, instrument_name: &str) {
+        self.instrument_name = instrument_name.to_string();
     }
 
     fn add_event(&mut self, event: ChannelEvent) {
@@ -248,46 +242,20 @@ impl<'data> Channel<'data> {
         notes_on
     }
 
-    fn get_notes_delta(&mut self, old_position: usize, new_position: usize) -> NoteDelta {
+    fn get_notes_delta(&self, old_position: usize, new_position: usize) -> NoteDelta {
         // Get the index to where we're starting
         debug_assert!(old_position < new_position);
-        let next_note_index = if self.next_note_index == 0 {
-            // take it from the top
-            0
-        } else {
-            // We're somewhere mid-way through this track, get an iter to the next note we're going to use
-            // I'm making the assumption here
-            let last_note = &self.note_events[self.next_note_index - 1];
-            let next_note = &self.note_events[self.next_note_index];
 
-            // last note should happen at or before where we stopped last time
-            // next note should happen after where we stopped last time
-            let last_note_as_expected = last_note.time_delta <= old_position;
-            let next_note_as_expected = next_note.time_delta > old_position;
-            if !(last_note_as_expected && next_note_as_expected) {
-                // Our stored note index seems like it was wrong. Calculate the correct position the hard way
-                self.calculate_next_note_index_from_time_delta(old_position)
-            }
-            else {
-                self.next_note_index
-            }
-        };
+        let start_note_index = self.calculate_next_note_index_from_time_delta(old_position);
 
         // Gather note events
         let mut note_events = Vec::new();
-        let mut reached_end_of_notes = true;
-        for i in next_note_index..self.note_events.len() {
+        for i in start_note_index..self.note_events.len() {
             let note_event = self.note_events[i].clone();
             if note_event.time_delta > new_position {
-                self.next_note_index = i;
-                reached_end_of_notes = false;
                 break;
             }
             note_events.push(note_event);
-        }
-        if reached_end_of_notes {
-            // We read every note. Set next note index to end 
-            self.next_note_index = self.note_events.len();
         }
 
         NoteDelta{ delta: note_events }
@@ -297,6 +265,7 @@ impl<'data> Channel<'data> {
         let search_result = self.note_events.binary_search_by(|a: &NoteEvent| {
             a.time_delta.cmp(&time_delta)
         });
+
         match search_result {
             Ok(index) => {
                 // found an index that has the exact time delta we want but since this was a binary search
@@ -363,20 +332,33 @@ impl NoteEvent {
 
 #[cfg(test)]
 mod tests {
-    use core::panic;
-
     use super::*;
     use crate::util::test_util;
 
-    fn get_test_midi_data<'parser_data>() -> MidiResult<MidiData<'parser_data>> {
+    fn get_test_midi_data() -> MidiResult<MidiData> {
         let path = test_util::get_test_midi_file_path();
         MidiData::from_file(path)
     }
 
     #[test]
     fn parse_midi_file() {
-        if let Err(err) = get_test_midi_data() {
-            panic!("Failed to parse midi: {}", err);
-        }
+        let midi_data = match get_test_midi_data() {
+            Ok(midi_data) => midi_data,
+            Err(err) => panic!("Failed to parse midi: {}", err)
+        };
+
+        let tracks = midi_data.get_tracks();
+        assert!(tracks.len() == 1);
+    }
+
+    #[test]
+    fn get_notes_delta() {
+        let midi_data = match get_test_midi_data() {
+            Ok(midi_data) => midi_data,
+            Err(err) => panic!("Failed to parse midi: {}", err)
+        };
+
+        let delta = midi_data.get_notes_delta(0, 0, 0, 2000);
+        assert!(true);
     }
 }
