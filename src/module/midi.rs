@@ -4,15 +4,12 @@ use crate::midi;
 use super::error::*;
 use super::traits::*;
 
-use midi_mono_note::MidiMonoNoteOutput;
-
 use std::collections::HashSet;
-use std::sync::{Arc, Mutex};
 
 pub struct MidiModuleBase {
     data: midi::data::MidiData,
     track: usize,
-    channel: usize,
+    channel: Option<usize>,
 
     playing: bool,
 
@@ -32,7 +29,7 @@ impl MidiModuleBase {
             }
         };
         let track = 0;
-        let channel = 0;
+        let channel = None;
 
         let playing = true;
 
@@ -51,12 +48,24 @@ impl MidiModuleBase {
             milliseconds_read })
     }
 
-    pub fn set_channel(&mut self, channel: usize) {
+    pub fn set_channel(&mut self, channel: Option<usize>) {
         self.channel = channel
     }
 
-    pub fn get_channel(&self) -> usize {
+    pub fn get_channel(&self) -> Option<usize> {
         self.channel
+    }
+
+    pub fn set_time(&mut self, milliseconds: usize) {
+        self.milliseconds_read = milliseconds;
+    }
+
+    pub fn rewind_time(&mut self, milliseconds: usize) {
+        self.milliseconds_read = self.milliseconds_read.saturating_sub(milliseconds);
+    }
+
+    pub fn fastforward_time(&mut self, milliseconds: usize) {
+        self.milliseconds_read += milliseconds;
     }
 
     pub fn get_notes_on_absolute(&self) -> ModuleResult<HashSet<u8>> {
@@ -81,9 +90,5 @@ impl MidiModuleBase {
                 return Err(ModuleError::new(&msg));
             }
         }
-    }
-
-    pub fn get_mono_note_output(midi_src_mutex_ptr: Arc<Mutex<Self>>) -> MidiMonoNoteOutput {
-        MidiMonoNoteOutput::new(midi_src_mutex_ptr)
     }
 }

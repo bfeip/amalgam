@@ -3,6 +3,10 @@ use super::error::*;
 
 use std::collections::HashSet;
 
+const MICROSECONDS_PER_MINUTE: u32 = 60_000_000;
+const DEFAULT_TEMPO: u32 = MICROSECONDS_PER_MINUTE / 120;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MidiData {
     tracks: Vec<Track>,
     time_division: parser::TimeDivision
@@ -39,7 +43,7 @@ impl MidiData {
     pub fn get_notes_on_absolute(
         &self,
         track_number: usize,
-        channel_number: usize,
+        channel_number: Option<usize>,
         milliseconds_read: usize
     ) -> MidiResult<HashSet<u8>> {
         let track = match self.tracks.get(track_number) {
@@ -57,7 +61,7 @@ impl MidiData {
     pub fn get_notes_delta(
         &self,
         track_number: usize,
-        channel_number: usize,
+        channel_number: Option<usize>,
         start_time_milliseconds: usize, 
         end_time_milliseconds: usize
     ) -> MidiResult<NoteDelta> {
@@ -80,6 +84,7 @@ impl MidiData {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Track {
     track_number: usize,
     track_name: String,
@@ -101,18 +106,22 @@ impl Track {
             track_name: String::new(),
             sequence_number: None,
             instrument_name: String::new(),
-            tempo: 120,
+            tempo: DEFAULT_TEMPO,
             channels
         };
 
         let mut meta_event_channel_prefix = Option::<usize>::None;
+        let mut previous_event_time_offset = 0_usize;
         for event in track_chunk.iter_events() {
             let time_delta = event.get_delta_time();
+            let time_offset = previous_event_time_offset + time_delta;
+            previous_event_time_offset = time_offset;
+
             match event.get_event_body() {
                 parser::event::EventBody::Channel(parser_channel_event) => {
                     // Put any channel events into their respective channels
                     let channel = parser_channel_event.get_channel() as usize;
-                    let channel_event = ChannelEvent::new(time_delta, parser_channel_event);
+                    let channel_event = ChannelEvent::new(time_offset, parser_channel_event);
                     ret.channels[channel].add_event(channel_event);
                 },
 
@@ -154,30 +163,53 @@ impl Track {
         ret
     }
 
-    fn get_notes_on_absolute(&self, channel_number: usize, tick_position: usize) -> MidiResult<HashSet<u8>> {
-        let channel = match self.channels.get(channel_number) {
-            Some(channel) => channel,
-            None => {
-                let msg = "Tried to get notes for non-existent channel";
-                return Err(MidiError::new(msg));
-            }
-        };
+    fn get_notes_on_absolute(&self, channel_number: Option<usize>, tick_position: usize) -> MidiResult<HashSet<u8>> {
+        if let Some(channel_number) = channel_number {
+            let channel = match self.channels.get(channel_number) {
+                Some(channel) => channel,
+                None => {
+                    let msg = "Tried to get notes for non-existent channel";
+                    return Err(MidiError::new(msg));
+                }
+            };
 
-        Ok(channel.get_notes_on_absolute(tick_position))
+            Ok(channel.get_notes_on_absolute(tick_position))
+        }
+        else {
+            let mut combined = HashSet::new();
+            for channel in self.channels.iter() {
+                combined = combined.union(&channel.get_notes_on_absolute(tick_position)).cloned().collect();
+            }
+            Ok(combined)
+        }
     }
 
     fn get_notes_delta(
-        &self, channel_number: usize, old_tick_position: usize, new_tick_position: usize
+        &self, channel_number: Option<usize>, old_tick_position: usize, new_tick_position: usize
     ) -> MidiResult<NoteDelta> {
-        let channel = match self.channels.get(channel_number) {
-            Some(channel) => channel,
-            None => {
-                let msg = "Tried to get notes for non-existent channel";
-                return Err(MidiError::new(msg));
-            }
-        };
+        if let Some(channel_number) = channel_number {
+            let channel = match self.channels.get(channel_number) {
+                Some(channel) => channel,
+                None => {
+                    let msg = "Tried to get notes for non-existent channel";
+                    return Err(MidiError::new(msg));
+                }
+            };
 
-        Ok(channel.get_notes_delta(old_tick_position, new_tick_position))
+            Ok(channel.get_notes_delta(old_tick_position, new_tick_position))
+        }
+        else {
+            let mut channel_deltas = vec![NoteDelta::new(); 16];
+            for (i, channel) in self.channels.iter().enumerate() {
+                let channel_delta = channel.get_notes_delta(old_tick_position, new_tick_position);
+                channel_deltas[i] = channel_delta;
+            }
+
+            let merged_iter = channel_deltas.iter().flat_map(|channel_delta| &channel_delta.delta);
+            let mut merged_delta: Vec<NoteEvent> = merged_iter.cloned().collect();
+            merged_delta.sort_by_cached_key(|k| k.time_offset);
+            Ok(NoteDelta { delta: merged_delta })
+        }
     }
 
     fn ticks_per_second(&self, time_division: parser::TimeDivision) -> usize {
@@ -186,13 +218,14 @@ impl Track {
                 frames_per_second as usize * ticks_per_frame as usize
             }
             parser::TimeDivision::TicksPerBeat(ticks_per_beat) => {
-                let beats_per_minute = self.tempo as usize;
+                let beats_per_minute = (MICROSECONDS_PER_MINUTE / self.tempo) as usize;
                 ticks_per_beat as usize * beats_per_minute / 60
             }
         }
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct Channel {
     number: u8,
     instrument_name: String,
@@ -227,7 +260,7 @@ impl Channel {
     fn get_notes_on_absolute(&self, tick_position: usize) -> HashSet<u8> {
         let mut notes_on = HashSet::new();
         for event in self.note_events.iter() {
-            if event.time_delta > tick_position {
+            if event.time_offset > tick_position {
                 return notes_on;
             }
             match event.event_type {
@@ -252,7 +285,7 @@ impl Channel {
         let mut note_events = Vec::new();
         for i in start_note_index..self.note_events.len() {
             let note_event = self.note_events[i].clone();
-            if note_event.time_delta > new_position {
+            if note_event.time_offset > new_position {
                 break;
             }
             note_events.push(note_event);
@@ -263,7 +296,7 @@ impl Channel {
 
     fn calculate_next_note_index_from_time_delta(&self, time_delta: usize) -> usize {
         let search_result = self.note_events.binary_search_by(|a: &NoteEvent| {
-            a.time_delta.cmp(&time_delta)
+            a.time_offset.cmp(&time_delta)
         });
 
         match search_result {
@@ -272,7 +305,7 @@ impl Channel {
                 // there could be other note events with the same time delta that happened before. We need
                 // to find the first one
                 for i in (0..index).rev() {
-                    if self.note_events[i].time_delta < time_delta {
+                    if self.note_events[i].time_offset < time_delta {
                         return i + 1;
                     }
                 }
@@ -287,47 +320,75 @@ impl Channel {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NoteDelta {
     pub delta: Vec<NoteEvent>
 }
 
+impl NoteDelta {
+    pub fn new() -> Self {
+        Self { delta: Vec::new() }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 enum ChannelEvent {
     Unused,
     Note(NoteEvent)
 }
 
 impl ChannelEvent {
-    fn new(time_delta: usize, parser_event: &parser::event::channel::MidiChannelEvent) -> Self {
+    fn new(time_offset: usize, parser_event: &parser::event::channel::MidiChannelEvent) -> Self {
         use parser::event::channel::ChannelEventBody;
         let parser_event_body = parser_event.get_inner_event();
         match parser_event_body {
             &ChannelEventBody::NoteOn{ note, velocity } =>
-                ChannelEvent::Note(NoteEvent::new(time_delta, NoteEventType::On, note, velocity)),
+                ChannelEvent::Note(NoteEvent::new(time_offset, NoteEventType::On, note, velocity)),
             &ChannelEventBody::NoteOff{ note, velocity } =>
-                ChannelEvent::Note(NoteEvent::new(time_delta, NoteEventType::Off, note, velocity)),
+                ChannelEvent::Note(NoteEvent::new(time_offset, NoteEventType::Off, note, velocity)),
             _ => ChannelEvent::Unused
         }
     }
 }
 
-#[derive(Clone)]
-enum NoteEventType {
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NoteEventType {
     On,
     Off,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct NoteEvent {
-    time_delta: usize,
+    time_offset: usize,
     event_type: NoteEventType,
     note_number: u8,
     velocity: u8
 }
 
 impl NoteEvent {
-    fn new(time_delta: usize, event_type: NoteEventType, note_number: u8, velocity: u8) -> Self {
-        Self { time_delta, event_type, note_number, velocity }
+    pub fn new(time_offset: usize, event_type: NoteEventType, note_number: u8, velocity: u8) -> Self {
+        Self { time_offset, event_type, note_number, velocity }
     }
+
+    pub fn get_time_offset(&self) -> usize {
+        self.time_offset
+    }
+
+    pub fn get_event_type(&self) -> NoteEventType {
+        self.event_type
+    }
+
+    pub fn get_note_number(&self) -> u8 {
+        self.note_number
+    }
+
+    pub fn get_velocity(&self) -> u8 {
+        self.velocity
+    }
+}
+
+pub fn tick_position_to_milliseconds(target_tick_position: usize, ticks_per_second: usize) -> usize {
+    target_tick_position * 1000 / ticks_per_second
 }
 
 #[cfg(test)]
@@ -352,13 +413,50 @@ mod tests {
     }
 
     #[test]
-    fn get_notes_delta() {
+    fn get_notes_delta_with_channel() {
         let midi_data = match get_test_midi_data() {
             Ok(midi_data) => midi_data,
             Err(err) => panic!("Failed to parse midi: {}", err)
         };
 
-        let delta = midi_data.get_notes_delta(0, 0, 0, 2000);
-        assert!(true);
+        let delta = match midi_data.get_notes_delta(0, Some(2), 0, 10_000) {
+            Ok(delta) => delta,
+            Err(err) => {
+                panic!("Failed to get note delta: {}", err);
+            }
+        };
+        assert_ne!(delta.delta.len(), 0, "Expected to get notes back");
+
+        let mut notes_on = HashSet::<u8>::new();
+        for note_event in delta.delta {
+            if note_event.event_type == NoteEventType::On {
+                notes_on.insert(note_event.note_number);
+            }
+            else if note_event.event_type == NoteEventType::Off {
+                notes_on.remove(&note_event.note_number);
+            }
+        }
+        assert_eq!(notes_on.len(), 0, "Expected every note that was on to have an off counterpart");
+    }
+
+    #[test]
+    fn get_notes_on_absolute_with_channel() {
+        let midi_data = match get_test_midi_data() {
+            Ok(midi_data) => midi_data,
+            Err(err) => panic!("Failed to parse midi: {}", err)
+        };
+
+        let ticks_per_second = midi_data.get_tracks()[0].ticks_per_second(midi_data.time_division);
+        let target_milliseconds = tick_position_to_milliseconds(5100, ticks_per_second);
+        
+        let notes_on = match midi_data.get_notes_on_absolute(0, Some(2), target_milliseconds) {
+            Ok(notes_on) => notes_on,
+            Err(err) => {
+                panic!("Failed to get notes on: {}", err);
+            }
+        };
+
+        assert_eq!(notes_on.len(), 1, "Expected there to be one note on");
+        assert!(notes_on.contains(&36), "Expected note 36 to be on");
     }
 }

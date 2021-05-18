@@ -74,7 +74,7 @@ impl MidiData {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum TimeDivision {
     TicksPerBeat(u16),
     FramesPerSecond{ frames_per_second: u8, ticks_per_frame: u8}
@@ -286,9 +286,11 @@ fn parse_variable_length<T: io::Read>(mut midi_stream: T) -> MidiResult<usize> {
         return Err(MidiError::new(msg));
     }
 
+    let n_bytes = bytes.len();
     let mut total_value = 0_usize;
-    for i in (0..bytes.len()).rev() {
-        let byte_value = (bytes[i] as usize & !0x80) << (7 * i);
+    for i in 0..n_bytes {
+        let shift_amount = 7 * (n_bytes - i - 1);
+        let byte_value = (bytes[i] as usize & !0x80) << shift_amount;
         total_value += byte_value;
     }
 
@@ -367,5 +369,29 @@ mod tests {
         if let Err(err) = MidiData::from_file(midi_file_path_str) {
             panic!("Failed to parse MIDI file: {}", err);
         }
+    }
+
+    #[test]
+    fn variable_length() {
+        let single_byte_input: &[u8] = &[0x3];
+        let single_byte_output = 0x3;
+        assert_eq!(
+            parse_variable_length(single_byte_input).expect("Failed to parse"),
+            single_byte_output,
+        );
+
+        let double_byte_input: &[u8] = &[0x81, 0x48];
+        let double_byte_output = 0xC8;
+        assert_eq!(
+            parse_variable_length(double_byte_input).expect("Failed to parse"),
+            double_byte_output,
+        );
+
+        let triple_byte_input: &[u8] = &[0xC0, 0x80, 0x00];
+        let triple_byte_output = 0x100000;
+        assert_eq!(
+            parse_variable_length(triple_byte_input).expect("Failed to parse"),
+            triple_byte_output,
+        );
     }
 }
