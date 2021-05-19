@@ -37,7 +37,9 @@ fn test_output() -> SynthResult<()> {
 
     let oscillator = Box::new(oscillator::Oscillator::new());
     synth.get_output_module_mut().set_audio_input(oscillator);
-    if let Err(err) = synth.play(&mut audio_output) {
+    let synth_mutex_ptr = std::sync::Arc::new(std::sync::Mutex::new(synth));
+
+    if let Err(err) = synth::Synth::play(synth_mutex_ptr, &mut audio_output) {
         let msg = format!("Failed to test full synth: {}", err);
         return Err(SynthError::new(&msg));
     }

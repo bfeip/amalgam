@@ -1,3 +1,7 @@
+use std::sync::{Arc, Mutex};
+
+pub type MutexPtr<T> = Arc<Mutex<T>>;
+
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct OutputTimestamp {
     timestamp: Option<cpal::OutputStreamTimestamp>

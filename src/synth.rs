@@ -4,6 +4,8 @@ use super::module::traits::{SignalOutputModule, OutputInfo, OutputTimestamp};
 use super::output::{AudioOutput};
 use super::clock;
 
+use std::sync::{Arc, Mutex};
+
 pub struct Synth {
     output_module: Output,
     sample_rate: usize,
@@ -28,7 +30,7 @@ impl Synth {
         &mut self.output_module
     }
 
-    pub fn play(mut self, audio_output: &mut AudioOutput) -> SynthResult<()> {
+    pub fn play(synth: Arc<Mutex<Self>>, audio_output: &mut AudioOutput) -> SynthResult<()> {
         let sample_type = match audio_output.get_sample_format() {
             Some(sample_type) => sample_type,
             None => {
@@ -45,31 +47,54 @@ impl Synth {
                 return Err(SynthError::new(msg));
             }
         };
-        let sample_rate_has_changed = self.sample_rate != new_sample_rate;
-        self.sample_rate = new_sample_rate;
 
-        // If the clock has not yet been initalized or it's invalid because the sample rate has changed
-        // set up a new clock
-        if self.master_sample_clock.is_none() || sample_rate_has_changed {
-            let clock = clock::SampleClock::new(new_sample_rate);
-            self.master_sample_clock = Some(clock);
+        // Mutex block so that synth is unlocked at the end of this block
+        {
+            // Lock synth mutex and so we can start doing things with it
+            let mut locked_synth = match synth.lock() {
+                Ok(locked_synth) => locked_synth,
+                Err(err) => {
+                    let msg = format!("Can't play. Synth lock is poisoned!: {}", err);
+                    return Err(SynthError::new(&msg));
+                }
+            };
+
+            let sample_rate_has_changed = locked_synth.sample_rate != new_sample_rate;
+            locked_synth.sample_rate = new_sample_rate;
+
+            // If the clock has not yet been initalized or it's invalid because the sample rate has changed
+            // set up a new clock
+            if locked_synth.master_sample_clock.is_none() || sample_rate_has_changed {
+                let clock = clock::SampleClock::new(new_sample_rate);
+                locked_synth.master_sample_clock = Some(clock);
+            }
         }
 
         match sample_type {
-            cpal::SampleFormat::F32 => self.play_helper::<f32>(audio_output),
-            cpal::SampleFormat::I16 => self.play_helper::<i16>(audio_output),
-            cpal::SampleFormat::U16 => self.play_helper::<u16>(audio_output)
+            cpal::SampleFormat::F32 => Self::play_with_cpal::<f32>(synth, audio_output),
+            cpal::SampleFormat::I16 => Self::play_with_cpal::<i16>(synth, audio_output),
+            cpal::SampleFormat::U16 => Self::play_with_cpal::<u16>(synth, audio_output)
         }
     }
 
-    pub fn play_helper<T: cpal::Sample>(self, audio_output: &mut AudioOutput) -> SynthResult<()> {
-        let mut output_module = self.output_module;
-        let sample_rate = self.sample_rate;
-        let mut sample_clock = self.master_sample_clock.unwrap();
-
+    fn play_with_cpal<T: cpal::Sample>(synth: Arc<Mutex<Self>>, audio_output: &mut AudioOutput) -> SynthResult<()> {
         // Create a callback to pass to CPAL to output the audio. This'll get passed to a different thread that
         // will actually play the audio.
         let output_callback = move |sample_buffer: &mut [T], callback_info: &cpal::OutputCallbackInfo| {
+            // Lock synth mutex and so we can start doing things with it
+            let mut locked_synth = match synth.lock() {
+                Ok(locked_synth) => locked_synth,
+                Err(err) => {
+                    // We're in trouble here. Since this is on the audio output thread all I can really do
+                    // is panic and hope CPAL handles it more gracefully than just blowing up
+                    panic!("Failed in audio output. Synth lock is poisoned!: {}", err);
+                }
+            };
+
+            let sample_rate = locked_synth.sample_rate;
+            let mut sample_clock = locked_synth.master_sample_clock.unwrap();
+            let output_module = &mut locked_synth.output_module;
+
             let buffer_length = sample_buffer.len();
             let mut f32_buffer = Vec::with_capacity(buffer_length);
             for _ in 0..buffer_length {
@@ -93,9 +118,9 @@ impl Synth {
 
         if let Err(err) = audio_output.play() {
             let msg = format!("Failed to play audio stream: {}", err);
-            Err(SynthError::new(&msg))
-        } else {
-            Ok(())
+            return Err(SynthError::new(&msg))
         }
+
+        Ok(())
     }
 }

@@ -1,11 +1,10 @@
-use super::MidiModuleBase;
 use super::super::error::{ModuleError, ModuleResult};
+use super::super::traits::MutexPtr;
+use super::super::midi::MidiModuleBase;
 use crate::midi;
 
-use std::{ops::DerefMut, sync::{Mutex, Arc}};
 use std::collections::HashSet;
-
-type MidiFileMutexPtr = Arc<Mutex<MidiModuleBase>>;
+use std::ops::DerefMut;
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 enum MidiMonoNotePriority {
@@ -16,13 +15,13 @@ enum MidiMonoNotePriority {
 }
 
 pub struct MidiMonoNoteOutput {
-    midi_source: MidiFileMutexPtr,
+    midi_source: MutexPtr<MidiModuleBase>,
     priority: MidiMonoNotePriority,
     on_notes: Vec<u8>
 }
 
 impl MidiMonoNoteOutput {
-    pub fn new(midi_source: MidiFileMutexPtr) -> Self {
+    pub fn new(midi_source: MutexPtr<MidiModuleBase>) -> Self {
         let priority = MidiMonoNotePriority::Last;
         let on_notes = Vec::new();
         Self { midi_source, priority, on_notes }
@@ -59,6 +58,8 @@ impl MidiMonoNoteOutput {
 mod tests {
     use super::*;
     use crate::util::test_util;
+
+    use std::sync::{Arc, Mutex};
 
     fn get_test_midi_module() -> MidiMonoNoteOutput {
         let path = test_util::get_test_midi_file_path();
