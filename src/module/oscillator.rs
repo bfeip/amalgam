@@ -1,5 +1,5 @@
 use crate::note;
-use super::traits::{SignalOutputModule, OutputInfo};
+use super::common::{SignalOutputModule, OutputInfo};
 
 const PI: f32 = std::f64::consts::PI as f32;
 const TAU: f32 = PI * 2.0;
@@ -126,7 +126,7 @@ impl SignalOutputModule for Oscillator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{module::traits::OutputTimestamp, prelude::*};
+    use crate::{module::common::OutputTimestamp, prelude::*};
     use crate::clock;
 
     fn get_osc_data_with_state(

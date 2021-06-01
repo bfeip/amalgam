@@ -1,4 +1,4 @@
-use super::traits::{SignalOutputModule, OutputInfo};
+use super::common::{SignalOutputModule, OutputInfo};
 use super::empty::Empty;
 
 /// A structure representing controls that would typically be on a output module

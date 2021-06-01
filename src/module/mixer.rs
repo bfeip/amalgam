@@ -1,5 +1,5 @@
 use crate::prelude::*;
-use super::traits::{SignalOutputModule, OutputInfo};
+use super::common::{SignalOutputModule, OutputInfo};
 use super::error::*;
 use super::empty::Empty;
 
@@ -132,11 +132,11 @@ impl SignalOutputModule for Mixer {
 
 #[cfg(test)]
 mod tests {
-    use traits::OutputTimestamp;
+    use common::OutputTimestamp;
 
     use super::*;
     use super::super::oscillator;
-    use super::super::traits;
+    use super::super::common;
     use crate::clock;
 
     fn get_square_and_25_pulse_mixer_inputs() -> (MixerInput, MixerInput) {

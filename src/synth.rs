@@ -1,6 +1,6 @@
 use super::error::{SynthResult, SynthError};
 use super::module::output::Output;
-use super::module::traits::{SignalOutputModule, OutputInfo, OutputTimestamp};
+use super::module::common::{SignalOutputModule, OutputInfo, OutputTimestamp};
 use super::output::{AudioOutput};
 use super::clock;
 

@@ -80,7 +80,7 @@ impl MidiData {
         let start_tick = start_time_milliseconds * ticks_per_second / 1000;
         let end_tick = end_time_milliseconds * ticks_per_second / 1000;
 
-        track.get_notes_delta(channel_number, start_tick, end_tick)
+        track.get_notes_delta(channel_number, ticks_per_second, start_tick, end_tick)
     }
 }
 
@@ -185,7 +185,8 @@ impl Track {
     }
 
     fn get_notes_delta(
-        &self, channel_number: Option<usize>, old_tick_position: usize, new_tick_position: usize
+        &self, channel_number: Option<usize>, ticks_per_second: usize,
+        old_tick_position: usize, new_tick_position: usize
     ) -> MidiResult<NoteDelta> {
         if let Some(channel_number) = channel_number {
             let channel = match self.channels.get(channel_number) {
@@ -196,19 +197,19 @@ impl Track {
                 }
             };
 
-            Ok(channel.get_notes_delta(old_tick_position, new_tick_position))
+            Ok(channel.get_notes_delta(ticks_per_second, old_tick_position, new_tick_position))
         }
         else {
-            let mut channel_deltas = vec![NoteDelta::new(); 16];
+            let mut channel_deltas = vec![NoteDelta::new(ticks_per_second); 16];
             for (i, channel) in self.channels.iter().enumerate() {
-                let channel_delta = channel.get_notes_delta(old_tick_position, new_tick_position);
+                let channel_delta = channel.get_notes_delta(ticks_per_second, old_tick_position, new_tick_position);
                 channel_deltas[i] = channel_delta;
             }
 
             let merged_iter = channel_deltas.iter().flat_map(|channel_delta| &channel_delta.delta);
             let mut merged_delta: Vec<NoteEvent> = merged_iter.cloned().collect();
             merged_delta.sort_by_cached_key(|k| k.time_offset);
-            Ok(NoteDelta { delta: merged_delta })
+            Ok(NoteDelta { ticks_per_second, delta: merged_delta })
         }
     }
 
@@ -275,7 +276,7 @@ impl Channel {
         notes_on
     }
 
-    fn get_notes_delta(&self, old_position: usize, new_position: usize) -> NoteDelta {
+    fn get_notes_delta(&self, ticks_per_second: usize, old_position: usize, new_position: usize) -> NoteDelta {
         // Get the index to where we're starting
         debug_assert!(old_position < new_position);
 
@@ -291,7 +292,7 @@ impl Channel {
             note_events.push(note_event);
         }
 
-        NoteDelta{ delta: note_events }
+        NoteDelta{ ticks_per_second, delta: note_events }
     }
 
     fn calculate_next_note_index_from_time_delta(&self, time_delta: usize) -> usize {
@@ -322,12 +323,21 @@ impl Channel {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NoteDelta {
+    ticks_per_second: usize,
     pub delta: Vec<NoteEvent>
 }
 
 impl NoteDelta {
-    pub fn new() -> Self {
-        Self { delta: Vec::new() }
+    pub fn new(ticks_per_second: usize) -> Self {
+        Self { ticks_per_second, delta: Vec::new() }
+    }
+
+    pub fn iter(&self) -> std::slice::Iter<NoteEvent> {
+        self.delta.iter()
+    }
+
+    pub fn iter_mut(&mut self) -> std::slice::IterMut<NoteEvent> {
+        self.delta.iter_mut()
     }
 }
 
@@ -384,6 +394,10 @@ impl NoteEvent {
 
     pub fn get_velocity(&self) -> u8 {
         self.velocity
+    }
+
+    pub fn get_time_in_milliseconds(&self, note_delta: &NoteDelta) -> usize {
+        tick_position_to_milliseconds(self.time_offset, note_delta.ticks_per_second)
     }
 }
 

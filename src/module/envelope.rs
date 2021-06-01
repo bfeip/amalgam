@@ -1,4 +1,4 @@
-use super::traits::{SignalOutputModule, OutputInfo};
+use super::common::{SignalOutputModule, OutputInfo};
 use super::empty::Empty;
 
 enum Adsr {
@@ -176,7 +176,7 @@ impl SignalOutputModule for Envelope {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{module::traits::OutputTimestamp, prelude::*};
+    use crate::{module::common::OutputTimestamp, prelude::*};
     use crate::clock;
 
     struct ConstantTrigger;

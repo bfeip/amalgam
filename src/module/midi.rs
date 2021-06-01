@@ -1,8 +1,8 @@
-mod midi_mono_note;
+pub mod midi_mono_note;
 
 use crate::midi;
 use super::error::*;
-use super::traits::*;
+use super::common::*;
 
 use std::collections::HashSet;
 
@@ -48,6 +48,22 @@ impl MidiModuleBase {
             milliseconds_read })
     }
 
+    pub fn set_track(&mut self, track_number: usize) -> ModuleResult<()> {
+        let track_len = self.data.get_tracks().len();
+        if self.data.get_tracks().len() <= track_number {
+            let msg = format!(
+                "MIDI track out of range. Attempted to set to {}, max track: {}", track_number, track_len
+            );
+            return Err(ModuleError::new(&msg));
+        }
+        self.track = track_number;
+        Ok(())
+    }
+
+    pub fn get_track(&self) -> usize {
+        self.track
+    }
+
     pub fn set_channel(&mut self, channel: Option<usize>) {
         self.channel = channel
     }
@@ -68,6 +84,10 @@ impl MidiModuleBase {
         self.milliseconds_read += milliseconds;
     }
 
+    pub fn get_time(&self) -> usize {
+        self.milliseconds_read
+    }
+
     pub fn get_notes_on_absolute(&self) -> ModuleResult<HashSet<u8>> {
         let notes_on_result = self.data.get_notes_on_absolute(self.track, self.channel, self.milliseconds_read);
         match notes_on_result {
@@ -79,7 +99,7 @@ impl MidiModuleBase {
         }
     }
 
-    pub fn get_notes_on_off_delta(&mut self, n_milliseconds: usize) -> ModuleResult<midi::data::NoteDelta> {
+    pub fn consume_notes_on_off_delta(&mut self, n_milliseconds: usize) -> ModuleResult<midi::data::NoteDelta> {
         let start_time = self.milliseconds_read;
         let end_time = start_time + n_milliseconds;
         let note_delta_result = self.data.get_notes_delta(self.track, self.channel, start_time, end_time);

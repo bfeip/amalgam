@@ -1,4 +1,4 @@
-use super::traits::{SignalOutputModule, OutputInfo};
+use super::common::{SignalOutputModule, OutputInfo};
 
 /// A zero sized struct representing a module that outputs nothing
 pub struct Empty;
