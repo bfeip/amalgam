@@ -67,7 +67,7 @@ pub struct Note {
 impl Note {
     pub fn from_midi_note(midi_note: u8) -> Self {
         let octave = midi_note as i8 / 12 + MIDI_NOTE_BASE_OCTAVE;
-        let tone_index = midi_note % 12 + MIDI_NOTE_BASE_TONE_OFFSET;
+        let tone_index = (midi_note + MIDI_NOTE_BASE_TONE_OFFSET) % 12;
         let tone = Tone::from_u8(tone_index).expect("Whoops! Tone out of range");
         Self { octave, tone }
     }
@@ -115,6 +115,8 @@ mod tests {
         assert_eq!(note, Note{ octave: 9, tone: Tone::G });
 
         note = Note::from_midi_note(0);
-        assert_eq!(note, Note{ octave: -2, tone: Tone::C });
+        assert_eq!(note, Note{ octave: -1, tone: Tone::C });
     }
+
+
 }

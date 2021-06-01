@@ -55,6 +55,6 @@ pub trait SignalOutputModule: std::marker::Send {
 }
 
 pub trait NoteOutputModule: std::marker::Send {
-    fn get_output(&mut self, n_samples: usize, output_info: &OutputInfo) -> Vec<Option<Note>>;
-    fn fill_output_buffer(&mut self, buffer: &mut [Option<Note>], output_info: &OutputInfo);
+    fn get_output(&mut self, n_samples: usize, output_info: &OutputInfo) -> Vec<Vec<Note>>;
+    fn fill_output_buffer(&mut self, buffer: &mut [Vec<Note>], output_info: &OutputInfo);
 }

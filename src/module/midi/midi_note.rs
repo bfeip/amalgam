@@ -8,24 +8,26 @@ use std::collections::HashSet;
 use std::ops::DerefMut;
 
 #[derive(Debug, Copy, Clone, PartialEq)]
-enum MidiMonoNotePriority {
+enum NotePriority {
     Low,
     High,
     First,
     Last
 }
 
-pub struct MidiMonoNoteOutput {
+pub struct MidiNoteOutput {
     midi_source: MutexPtr<MidiModuleBase>,
-    priority: MidiMonoNotePriority,
+    priority: NotePriority,
+    max_voices: u32,
     on_notes: Vec<u8>
 }
 
-impl MidiMonoNoteOutput {
+impl MidiNoteOutput {
     pub fn new(midi_source: MutexPtr<MidiModuleBase>) -> Self {
-        let priority = MidiMonoNotePriority::Last;
+        let priority = NotePriority::Last;
+        let max_voices = 1; // Mono by default
         let on_notes = Vec::new();
-        Self { midi_source, priority, on_notes }
+        Self { midi_source, priority, max_voices, on_notes }
     }
 
     // Gets all notes that are currently on
@@ -54,34 +56,43 @@ impl MidiMonoNoteOutput {
         midi_src.deref_mut().consume_notes_on_off_delta(n_milliseconds)
     }
 
-    fn get_currently_on(&self) -> Option<u8> {
-        match self.priority {
-            MidiMonoNotePriority::High => {
-                let mut max_note = Option::<u8>::None;
-                for note in self.on_notes.iter().cloned() {
-                    if max_note.is_none() || note > max_note.unwrap() {
-                        max_note = Some(note);
-                    }
-                }
-                max_note
-            },
-            MidiMonoNotePriority::Low => {
-                let mut min_note = Option::<u8>::None;
-                for note in self.on_notes.iter().cloned() {
-                    if min_note.is_none() || note < min_note.unwrap() {
-                        min_note = Some(note);
-                    }
-                }
-                min_note
+    fn get_active_notes(&self) -> Vec<u8> {
+        let on_notes_len = self.on_notes.len();
+        if on_notes_len as u32 <= self.max_voices {
+            // If there are enough voices for all our notes then just send them all
+            if self.priority == NotePriority::High || self.priority == NotePriority::Low {
+                // Low and high outputs should be sorted for consistancy
+                let mut ret = self.on_notes.clone();
+                ret.sort();
+                return ret
             }
-            MidiMonoNotePriority::First => self.on_notes.first().cloned(),
-            MidiMonoNotePriority::Last => self.on_notes.last().cloned()
+            return self.on_notes.clone();
+        }
+
+        match self.priority {
+            NotePriority::High => {
+                let mut on_notes_by_value = self.on_notes.clone();
+                on_notes_by_value.sort();
+                let split_point = on_notes_len - self.max_voices as usize;
+                let (_, important_notes) = on_notes_by_value.split_at(split_point);
+                important_notes.to_owned()
+            },
+
+            NotePriority::Low => {
+                let mut on_notes_by_value = self.on_notes.clone();
+                on_notes_by_value.sort();
+                let split_point = self.max_voices as usize;
+                let (important_notes, _) = on_notes_by_value.split_at(split_point);
+                important_notes.to_owned()
+            }
+            NotePriority::First => self.on_notes.split_at(self.max_voices as usize).0.to_owned(),
+            NotePriority::Last => self.on_notes.split_at(on_notes_len - self.max_voices as usize).1.to_owned()
         }
     }
 }
 
-impl NoteOutputModule for MidiMonoNoteOutput {
-    fn get_output(&mut self, n_samples: usize, output_info: &OutputInfo) -> Vec<Option<Note>> {
+impl NoteOutputModule for MidiNoteOutput {
+    fn get_output(&mut self, n_samples: usize, output_info: &OutputInfo) -> Vec<Vec<Note>> {
         let n_milliseconds = n_samples * 1000 / output_info.sample_rate;
         let note_delta = match self.consume_notes_on_off_delta(n_milliseconds) {
             Ok(delta) => delta,
@@ -97,18 +108,18 @@ impl NoteOutputModule for MidiMonoNoteOutput {
             None => {
                 // There aren't any changes for this sample period.
                 // Do whatever we were doing before.
-                match self.get_currently_on() {
-                    Some(current_midi_note) => {
-                        // There's no changes and we already have a note active from a previous sample period.
-                        // Just play it.
-                        let current_note = Note::from_midi_note(current_midi_note);
-                        return vec![Some(current_note); n_samples]
-                    },
-                    None => {
-                        // Nothing is happening... Report back as such
-                        return vec![None; n_samples];
-                    }
+                let active_midi_notes = self.get_active_notes();
+                let active_notes_len = active_midi_notes.len();
+                let mut active_notes = Vec::with_capacity(active_notes_len);
+                for active_midi_note in active_midi_notes {
+                    let active_note = Note::from_midi_note(active_midi_note);
+                    active_notes.push(active_note);
                 }
+                let mut ret = Vec::with_capacity(n_samples);
+                for _ in 0..n_samples {
+                    ret.push(active_notes.clone());
+                }
+                return ret;
             }
         };
 
@@ -139,29 +150,35 @@ impl NoteOutputModule for MidiMonoNoteOutput {
                     midi::data::NoteEventType::Off =>
                         self.on_notes.retain(|on_note_number| *on_note_number != delta_note_number)
                 }
+
+                // Get next delta if there is one
                 next_delta = match delta_iter.next() {
                     Some(new_next_delta) => new_next_delta,
-                    None => next_delta
+                    None => break // I think?
                 };
                 next_delta_start_milliseconds = next_delta.get_time_in_milliseconds(&note_delta);
             }
-            // Insert correct note (if there is one) into output vec
-            let midi_note = self.get_currently_on();
-            let actual_note = match midi_note {
-                Some(midi_note) => Some(Note::from_midi_note(midi_note)),
-                None => None
-            };
-            ret.push(actual_note);
+
+            // Insert correct notes into output vec
+            let active_midi_notes = self.get_active_notes();
+            let mut active_notes = Vec::with_capacity(active_midi_notes.len());
+            for active_midi_note in active_midi_notes {
+                let active_note = Note::from_midi_note(active_midi_note);
+                active_notes.push(active_note);
+            }
+
+            ret.push(active_notes);
         }
         ret
     }
 
-    fn fill_output_buffer(&mut self, buffer: &mut [Option<Note>], output_info: &OutputInfo) {
+    fn fill_output_buffer(&mut self, buffer: &mut [Vec<Note>], output_info: &OutputInfo) {
         // Do this all the lazy way... just calculate the whole thing and copy it over
         let output = self.get_output(buffer.len(), output_info);
         debug_assert!(output.len() == buffer.len(), "Output and initial buffer differ in size");
         for i in 0..output.len() {
-            buffer[i] = output[i];
+            // TODO: very lazy, get rid of clone... just do a move
+            buffer[i] = output[i].clone();
         }
     }
 }
@@ -169,11 +186,13 @@ impl NoteOutputModule for MidiMonoNoteOutput {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use super::super::super::common::OutputTimestamp;
+    use crate::clock;
     use crate::util::test_util;
 
     use std::sync::{Arc, Mutex};
 
-    fn get_test_midi_module() -> MidiMonoNoteOutput {
+    fn get_test_midi_module() -> MidiNoteOutput {
         let path = test_util::get_test_midi_file_path();
         let midi_module_base = match MidiModuleBase::open(path) {
             Ok(midi_module_base) => midi_module_base,
@@ -183,7 +202,7 @@ mod tests {
         };
         
         let arc_mutex_midi = Arc::new(Mutex::new(midi_module_base));
-        MidiMonoNoteOutput::new(arc_mutex_midi)
+        MidiNoteOutput::new(arc_mutex_midi)
     }
 
     #[test]
@@ -227,5 +246,80 @@ mod tests {
 
         assert_eq!(notes_on.len(), 2, "Expected there to be two notes on");
         assert!(notes_on.contains(&36) && notes_on.contains(&73), "Expected notes 36 & 73 to be on");
+    }
+
+    #[test]
+    fn get_active_notes() {
+        const ON_NOTES: &[u8] = &[1, 4, 3, 5, 2];
+        let mut midi_module = get_test_midi_module();
+        midi_module.on_notes = ON_NOTES.to_owned();
+        
+        midi_module.priority = NotePriority::First;
+        let mut active_notes = midi_module.get_active_notes();
+        assert_eq!(*active_notes, [1]);
+
+        midi_module.priority = NotePriority::Last;
+        active_notes = midi_module.get_active_notes();
+        assert_eq!(*active_notes, [2]);
+
+        midi_module.priority = NotePriority::Low;
+        active_notes = midi_module.get_active_notes();
+        assert_eq!(*active_notes, [1]);
+
+        midi_module.priority = NotePriority::High;
+        active_notes = midi_module.get_active_notes();
+        assert_eq!(*active_notes, [5]);
+
+        midi_module.max_voices = 3;
+
+        midi_module.priority = NotePriority::Low;
+        active_notes = midi_module.get_active_notes();
+        assert_eq!(*active_notes, [1, 2, 3]);
+
+        midi_module.priority = NotePriority::High;
+        active_notes = midi_module.get_active_notes();
+        assert_eq!(*active_notes, [3, 4, 5]);
+
+        midi_module.priority = NotePriority::First;
+        active_notes = midi_module.get_active_notes();
+        assert_eq!(*active_notes, [1, 4, 3]);
+
+        midi_module.priority = NotePriority::Last;
+        active_notes = midi_module.get_active_notes();
+        assert_eq!(*active_notes, [3, 5, 2]);
+
+        midi_module.max_voices = 10;
+
+        midi_module.priority = NotePriority::Low;
+        active_notes = midi_module.get_active_notes();
+        assert_eq!(*active_notes, [1, 2, 3, 4, 5]);
+
+        midi_module.priority = NotePriority::High;
+        active_notes = midi_module.get_active_notes();
+        assert_eq!(*active_notes, [1, 2, 3, 4, 5]);
+
+        midi_module.priority = NotePriority::First;
+        active_notes = midi_module.get_active_notes();
+        assert_eq!(*active_notes, [1, 4, 3, 5, 2]);
+
+        midi_module.priority = NotePriority::Last;
+        active_notes = midi_module.get_active_notes();
+        assert_eq!(*active_notes, [1, 4, 3, 5, 2]);
+    }
+
+    #[test]
+    fn get_mono_output() {
+        const SAMPLE_RATE: usize = 10_000;
+        const N_SAMPLES: usize = SAMPLE_RATE * 10; // 10 seconds
+        let mut midi_module = get_test_midi_module();
+
+        let mut sample_clock = clock::SampleClock::new(SAMPLE_RATE);
+        let sample_range = sample_clock.get_range(N_SAMPLES);
+        let output_timestamp = OutputTimestamp::empty();
+        let output_info = OutputInfo::new(SAMPLE_RATE, sample_range, output_timestamp);
+
+        let output = midi_module.get_output(N_SAMPLES, &output_info);
+        assert_eq!(output.len(), N_SAMPLES, "Output length does not match expected");
+        // Theres not really a great way I can think of to test this...
     }
 }

@@ -1,4 +1,4 @@
-pub mod midi_mono_note;
+pub mod midi_note;
 
 use crate::midi;
 use super::error::*;
