@@ -1,12 +1,12 @@
 use crate::note;
-use super::common::{SignalOutputModule, OutputInfo};
+use super::common::*;
 
 const PI: f32 = std::f64::consts::PI as f32;
 const TAU: f32 = PI * 2.0;
 const U16_MID: u16 = u16::MAX / 2;
 
 /// Represents one of the basic waveforms
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Waveform {
     Sine,
     Triangle,
@@ -16,7 +16,7 @@ pub enum Waveform {
 }
 
 /// Contains the parameters that determine how an oscillator will sound
-#[derive(Copy, Clone)]
+#[derive(Debug, Clone)]
 pub struct OscillatorState {
     /// Basic waveform that will be played
     pub waveform: Waveform,
@@ -66,10 +66,14 @@ impl Oscillator {
     }
 
     pub fn set_state(&mut self, state: &OscillatorState) {
-        self.state = *state;
+        self.state = state.clone();
     }
 
-    pub fn fill_sine(&self, buffer: &mut [f32], clock_values: &[usize], sample_rate: usize) {
+    pub fn set_frequency(&mut self, freq: f32) {
+        self.state.frequency = freq
+    }
+
+    fn fill_sine(&self, buffer: &mut [f32], clock_values: &[usize], sample_rate: usize) {
         debug_assert!(buffer.len() == clock_values.len());
         for (value, clock_value) in buffer.iter_mut().zip(clock_values.iter()) {
             let clock_value = *clock_value as f32;
@@ -78,7 +82,7 @@ impl Oscillator {
         }
     }
 
-    pub fn fill_ramp(&self, buffer: &mut [f32], clock_values: &[usize], sample_rate: usize) {
+    fn fill_ramp(&self, buffer: &mut [f32], clock_values: &[usize], sample_rate: usize) {
         debug_assert!(buffer.len() == clock_values.len());
         for (value, clock_value) in buffer.iter_mut().zip(clock_values.iter()) {
             let clock_value = *clock_value as f32;
@@ -87,7 +91,7 @@ impl Oscillator {
         }
     }
 
-    pub fn fill_saw(&self, buffer: &mut [f32], clock_values: &[usize], sample_rate: usize) {
+    fn fill_saw(&self, buffer: &mut [f32], clock_values: &[usize], sample_rate: usize) {
         debug_assert!(buffer.len() == clock_values.len());
         for (value, clock_value) in buffer.iter_mut().zip(clock_values.iter()) {
             let clock_value = *clock_value as f32;
@@ -96,7 +100,7 @@ impl Oscillator {
         }
     }
 
-    pub fn fill_pulse(&self, buffer: &mut [f32], clock_values: &[usize], sample_rate: usize) {
+    fn fill_pulse(&self, buffer: &mut [f32], clock_values: &[usize], sample_rate: usize) {
         debug_assert!(buffer.len() == clock_values.len());
         for (value, clock_value) in buffer.iter_mut().zip(clock_values.iter()) {
             let clock_value = *clock_value as f32;
@@ -106,7 +110,7 @@ impl Oscillator {
         }
     }
 
-    pub fn fill(&self, buffer: &mut [f32], clock_values: &[usize], sample_rate: usize) {
+    fn fill(&self, buffer: &mut [f32], clock_values: &[usize], sample_rate: usize) {
         match self.state.waveform {
             Waveform::Sine     => self.fill_sine(buffer, clock_values, sample_rate),
             Waveform::Ramp     => self.fill_ramp(buffer, clock_values, sample_rate),

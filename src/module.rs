@@ -9,3 +9,4 @@ pub mod mixer;
 pub mod envelope;
 pub mod midi;
 pub mod output;
+pub mod voice;

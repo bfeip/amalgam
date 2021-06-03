@@ -1,23 +1,33 @@
 use crate::prelude::*;
-use super::common::{SignalOutputModule, OutputInfo};
+use super::common::{SignalOutputModule, OutputInfo, MutexPtr};
 use super::error::*;
 use super::empty::Empty;
 
-struct MixerInput {
-    input: Box<dyn SignalOutputModule>,
+use std::sync::{Arc, Mutex};
+
+pub struct MixerInput {
+    input: MutexPtr<dyn SignalOutputModule>,
     level: f32
 }
 
 impl MixerInput {
-    fn new() -> Self {
-        let input = Box::new(Empty::new());
+    pub fn new() -> Self {
+        let input = Arc::new(Mutex::new(Empty::new()));
         let level = 1_f32;
         Self { input, level }
     }
 
-    fn with_input(input: Box<dyn SignalOutputModule>) -> Self {
+    pub fn with_input(input: MutexPtr<dyn SignalOutputModule>) -> Self {
         let level = 1_f32;
         Self { input, level }
+    }
+
+    pub fn set_input(&mut self, input: MutexPtr<dyn SignalOutputModule>) {
+        self.input = input;
+    }
+
+    pub fn set_level(&mut self, level: f32) {
+        self.level = level;
     }
 }
 
@@ -28,19 +38,19 @@ enum MixerCompressMode {
     Limit
 }
 
-struct Mixer {
+pub struct Mixer {
     inputs: Vec<MixerInput>,
     compression_mode: MixerCompressMode
 }
 
 impl Mixer {
-    fn new() -> Self {
+    pub fn new() -> Self {
         let inputs = Vec::new();
         let compression_mode = MixerCompressMode::None;
         Self { inputs, compression_mode }
     }
 
-    fn with_inputs(n_inputs: usize) -> Self {
+    pub fn with_inputs(n_inputs: usize) -> Self {
         let mut inputs = Vec::with_capacity(n_inputs);
         for _ in 0..n_inputs {
             inputs.push(MixerInput::new());
@@ -49,17 +59,25 @@ impl Mixer {
         Self { inputs, compression_mode }
     }
 
-    fn add_input(&mut self, input: MixerInput) {
+    pub fn add_input(&mut self, input: MixerInput) {
         self.inputs.push(input);
     }
 
-    fn remove_input(&mut self, input_index: usize) -> ModuleResult<()> {
+    pub fn remove_input(&mut self, input_index: usize) -> ModuleResult<()> {
         if input_index > self.inputs.len() {
             let msg = "Tried to remove element from mixer that was out of bounds";
             return Err(ModuleError::new(msg));
         }
         self.inputs.remove(input_index);
         Ok(())
+    }
+
+    pub fn iter_inputs(&self) -> std::slice::Iter<MixerInput> {
+        self.inputs.iter()
+    }
+
+    pub fn iter_inputs_mut(&mut self) -> std::slice::IterMut<MixerInput> {
+        self.inputs.iter_mut()
     }
 }
 
@@ -77,7 +95,8 @@ impl SignalOutputModule for Mixer {
         data_buffer.resize(data_len, 0.0);
         for i in 0..input_len {
             let input = &mut self.inputs[i];
-            input.input.fill_output_buffer(&mut data_buffer, output_info);
+            let mut signal_input_lock = input.input.lock().expect("Mixer input lock is poisoned");
+            signal_input_lock.fill_output_buffer(&mut data_buffer, output_info);
 
             // Apply the level if we need to
             if !float_eq(input.level, 1.0, 0.000001) {
@@ -148,8 +167,8 @@ mod tests {
         osc2_state.pulse_width = 0.25;
         let osc1 = oscillator::Oscillator::from_state(&osc1_state);
         let osc2 = oscillator::Oscillator::from_state(&osc2_state);
-        let mixer_input_1 = MixerInput::with_input(Box::new(osc1));
-        let mixer_input_2 = MixerInput::with_input(Box::new(osc2));
+        let mixer_input_1 = MixerInput::with_input(Arc::new(Mutex::new(osc1)));
+        let mixer_input_2 = MixerInput::with_input(Arc::new(Mutex::new(osc2)));
         (mixer_input_1, mixer_input_2)
     }
 

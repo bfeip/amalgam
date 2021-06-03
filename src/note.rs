@@ -17,7 +17,7 @@ const MIDI_NOTE_BASE_OCTAVE: i8 = -1;
 const MIDI_NOTE_BASE_TONE_OFFSET: u8 = 3; // numeric offset from A i.e. 3 is C
 
 /// Represents the notes within an octave
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Hash)]
 pub enum Tone {
     A,
     ASharp,
@@ -58,45 +58,48 @@ impl Tone {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Note {
     pub octave: i8,
     pub tone: Tone
 }
 
 impl Note {
+    pub const fn new(octave: i8, tone: Tone) -> Self{
+        Self { octave, tone }
+    }
+
     pub fn from_midi_note(midi_note: u8) -> Self {
         let octave = midi_note as i8 / 12 + MIDI_NOTE_BASE_OCTAVE;
         let tone_index = (midi_note + MIDI_NOTE_BASE_TONE_OFFSET) % 12;
         let tone = Tone::from_u8(tone_index).expect("Whoops! Tone out of range");
         Self { octave, tone }
     }
-}
 
-/// Given a note and an octave this function will return a frequency
-pub fn note_to_freq(note: Note) -> f32 {
-    let default_freq = match note.tone {
-        Tone::A      => FREQ_A,
-        Tone::ASharp => FREQ_A_SHARP,
-        Tone::B      => FREQ_B,
-        Tone::C      => FREQ_C,
-        Tone::CSharp => FREQ_C_SHARP,
-        Tone::D      => FREQ_D,
-        Tone::DSharp => FREQ_D_SHARP,
-        Tone::E      => FREQ_E,
-        Tone::F      => FREQ_F,
-        Tone::FSharp => FREQ_F_SHARP,
-        Tone::G      => FREQ_G,
-        Tone::GSharp => FREQ_G_SHARP,
-    };
-
-    let default_octave = if note.tone <= Tone::C { 4 } else { 5 };
-    let octave_shift = note.octave - default_octave;
-
-    // E.g. A4 shifted down one octave is 440 * (2^-1) 
-    let freq_shift_degree = 2_u8.pow(octave_shift as u32);
-    let freq = default_freq * freq_shift_degree as f32;
-    freq
+    pub fn to_freq(&self) -> f32 {
+        let default_freq = match self.tone {
+            Tone::A      => FREQ_A,
+            Tone::ASharp => FREQ_A_SHARP,
+            Tone::B      => FREQ_B,
+            Tone::C      => FREQ_C,
+            Tone::CSharp => FREQ_C_SHARP,
+            Tone::D      => FREQ_D,
+            Tone::DSharp => FREQ_D_SHARP,
+            Tone::E      => FREQ_E,
+            Tone::F      => FREQ_F,
+            Tone::FSharp => FREQ_F_SHARP,
+            Tone::G      => FREQ_G,
+            Tone::GSharp => FREQ_G_SHARP,
+        };
+    
+        let default_octave = if self.tone <= Tone::C { 4 } else { 5 };
+        let octave_shift = self.octave - default_octave;
+    
+        // E.g. A4 shifted down one octave is 440 * (2^-1) 
+        let freq_shift_degree = 2_f32.powi(octave_shift as i32);
+        let freq = default_freq * freq_shift_degree as f32;
+        freq
+    }
 }
 
 #[cfg(test)]

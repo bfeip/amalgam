@@ -93,6 +93,8 @@ impl MidiNoteOutput {
 
 impl NoteOutputModule for MidiNoteOutput {
     fn get_output(&mut self, n_samples: usize, output_info: &OutputInfo) -> Vec<Vec<Note>> {
+        // TODO: This does not take retriggers into account. In a normal synth if a note went off and on again
+        // at the same instant the envelope would be retriggered. But that doesn't happen here...
         let n_milliseconds = n_samples * 1000 / output_info.sample_rate;
         let note_delta = match self.consume_notes_on_off_delta(n_milliseconds) {
             Ok(delta) => delta,
