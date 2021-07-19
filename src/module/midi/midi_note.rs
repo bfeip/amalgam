@@ -1,5 +1,5 @@
 use super::super::error::{ModuleError, ModuleResult};
-use super::super::common::{MutexPtr, NoteOutputModule, OutputInfo};
+use super::super::common::{MutexPtr, NoteOutputModule, OutputInfo, OutputTimestamp};
 use super::super::midi::MidiModuleBase;
 use crate::midi;
 use crate::note::Note;
@@ -44,7 +44,9 @@ impl MidiNoteOutput {
     }
     
     /// Gets changes in note state since the last time this was called
-    fn consume_notes_on_off_delta(&mut self, n_milliseconds: usize) -> ModuleResult<midi::data::NoteDelta> {
+    fn consume_notes_on_off_delta(
+        &mut self, n_milliseconds: usize, timestamp: &OutputTimestamp
+    ) -> ModuleResult<midi::data::NoteDelta> {
         let mut midi_src = match self.midi_source.lock() {
             Ok(midi_src) => midi_src,
             Err(err) => {
@@ -53,7 +55,7 @@ impl MidiNoteOutput {
             }
         };
 
-        midi_src.deref_mut().consume_notes_on_off_delta(n_milliseconds)
+        midi_src.deref_mut().consume_notes_on_off_delta(n_milliseconds, timestamp)
     }
 
     fn get_active_notes(&self) -> Vec<u8> {
@@ -92,11 +94,11 @@ impl MidiNoteOutput {
 }
 
 impl NoteOutputModule for MidiNoteOutput {
-    fn get_output(&mut self, n_samples: usize, output_info: &OutputInfo) -> Vec<Vec<Note>> {
+    fn get_output(&mut self, n_samples: usize, output_info: &OutputInfo) -> Vec<HashSet<Note>> {
         // TODO: This does not take retriggers into account. In a normal synth if a note went off and on again
         // at the same instant the envelope would be retriggered. But that doesn't happen here...
         let n_milliseconds = n_samples * 1000 / output_info.sample_rate;
-        let note_delta = match self.consume_notes_on_off_delta(n_milliseconds) {
+        let note_delta = match self.consume_notes_on_off_delta(n_milliseconds, &output_info.timestamp) {
             Ok(delta) => delta,
             Err(err) => {
                 // TODO: Remove panic. I think that involves changing the signature of MidiMonoNoteOutput
@@ -112,10 +114,10 @@ impl NoteOutputModule for MidiNoteOutput {
                 // Do whatever we were doing before.
                 let active_midi_notes = self.get_active_notes();
                 let active_notes_len = active_midi_notes.len();
-                let mut active_notes = Vec::with_capacity(active_notes_len);
+                let mut active_notes = HashSet::with_capacity(active_notes_len);
                 for active_midi_note in active_midi_notes {
                     let active_note = Note::from_midi_note(active_midi_note);
-                    active_notes.push(active_note);
+                    active_notes.insert(active_note);
                 }
                 let mut ret = Vec::with_capacity(n_samples);
                 for _ in 0..n_samples {
@@ -163,10 +165,10 @@ impl NoteOutputModule for MidiNoteOutput {
 
             // Insert correct notes into output vec
             let active_midi_notes = self.get_active_notes();
-            let mut active_notes = Vec::with_capacity(active_midi_notes.len());
+            let mut active_notes = HashSet::with_capacity(active_midi_notes.len());
             for active_midi_note in active_midi_notes {
                 let active_note = Note::from_midi_note(active_midi_note);
-                active_notes.push(active_note);
+                active_notes.insert(active_note);
             }
 
             ret.push(active_notes);
@@ -174,7 +176,7 @@ impl NoteOutputModule for MidiNoteOutput {
         ret
     }
 
-    fn fill_output_buffer(&mut self, buffer: &mut [Vec<Note>], output_info: &OutputInfo) {
+    fn fill_output_buffer(&mut self, buffer: &mut [HashSet<Note>], output_info: &OutputInfo) {
         // Do this all the lazy way... just calculate the whole thing and copy it over
         let output = self.get_output(buffer.len(), output_info);
         debug_assert!(output.len() == buffer.len(), "Output and initial buffer differ in size");
@@ -212,7 +214,7 @@ mod tests {
         let mut midi_module = get_test_midi_module();
         midi_module.midi_source.lock().expect("Failed to lock midi source").set_channel(Some(2));
 
-        let delta = match midi_module.consume_notes_on_off_delta(10_000) {
+        let delta = match midi_module.consume_notes_on_off_delta(10_000, &OutputTimestamp::empty()) {
             Ok(delta) => delta,
             Err(err) => {
                 panic!("Failed to get note delta: {}", err);

@@ -1,5 +1,8 @@
 use crate::note;
 use super::common::*;
+use super::empty::Empty;
+
+use std::sync::{Arc, Mutex};
 
 const PI: f32 = std::f64::consts::PI as f32;
 const TAU: f32 = PI * 2.0;
@@ -42,17 +45,20 @@ impl OscillatorState {
 pub struct Oscillator {
     /// Contains all the information needed to replicate the oscillator
     state: OscillatorState,
+    freq_override_input: MutexPtr<dyn OptionalSignalOutputModule>
 }
 
 impl Oscillator {
     /// Creates a basic sine wave oscillator stream with a default `OscillatorState`
     pub fn new() -> Self {
         let state = OscillatorState::new();
-        Oscillator { state }
+        let freq_input = Arc::new(Mutex::new(Empty::new()));
+        Oscillator { state, freq_override_input: freq_input }
     }
 
     pub fn from_state(state: &OscillatorState) -> Self {
-        Oscillator { state: state.clone() }
+        let freq_input = Arc::new(Mutex::new(Empty::new()));
+        Oscillator { state: state.clone(), freq_override_input: freq_input }
     }
 
     /// Retrieves a reference to the `OscillatorState`
@@ -73,49 +79,78 @@ impl Oscillator {
         self.state.frequency = freq
     }
 
-    fn fill_sine(&self, buffer: &mut [f32], clock_values: &[usize], sample_rate: usize) {
-        debug_assert!(buffer.len() == clock_values.len());
-        for (value, clock_value) in buffer.iter_mut().zip(clock_values.iter()) {
-            let clock_value = *clock_value as f32;
+    pub fn set_frequency_override_input(&mut self, override_input: MutexPtr<dyn OptionalSignalOutputModule>) {
+        self.freq_override_input = override_input;
+    }
+
+    fn fill_sine(&self, buffer: &mut [f32], clock_values: &[usize], freq_values: &[f32], sample_rate: usize) {
+        let buffer_len = buffer.len();
+        debug_assert!(buffer_len == clock_values.len() && buffer_len == freq_values.len());
+        for i in 0..buffer_len {
+            let clock_value = clock_values[i] as f32;
+            let freq_value = freq_values[i];
             let sample_rate = sample_rate as f32;
-            *value = (self.state.frequency * clock_value * TAU / sample_rate).sin();
+
+            buffer[i] = (freq_value * clock_value * TAU / sample_rate).sin();
         }
     }
 
-    fn fill_ramp(&self, buffer: &mut [f32], clock_values: &[usize], sample_rate: usize) {
-        debug_assert!(buffer.len() == clock_values.len());
-        for (value, clock_value) in buffer.iter_mut().zip(clock_values.iter()) {
-            let clock_value = *clock_value as f32;
+    fn fill_ramp(&self, buffer: &mut [f32], clock_values: &[usize], freq_values: &[f32], sample_rate: usize) {
+        let buffer_len = buffer.len();
+        debug_assert!(buffer_len == clock_values.len() && buffer_len == freq_values.len());
+        for i in 0..buffer_len {
+            let clock_value = clock_values[i] as f32;
+            let freq_value = freq_values[i];
             let sample_rate = sample_rate as f32;
-            *value = (self.state.frequency * clock_value * 2_f32 / sample_rate) % 2_f32 - 1_f32;
+
+            buffer[i] = (freq_value * clock_value * 2_f32 / sample_rate) % 2_f32 - 1_f32;
         }
     }
 
-    fn fill_saw(&self, buffer: &mut [f32], clock_values: &[usize], sample_rate: usize) {
-        debug_assert!(buffer.len() == clock_values.len());
-        for (value, clock_value) in buffer.iter_mut().zip(clock_values.iter()) {
-            let clock_value = *clock_value as f32;
+    fn fill_saw(&self, buffer: &mut [f32], clock_values: &[usize], freq_values: &[f32], sample_rate: usize) {
+        let buffer_len = buffer.len();
+        debug_assert!(buffer_len == clock_values.len() && buffer_len == freq_values.len());
+        for i in 0..buffer_len {
+            let clock_value = clock_values[i] as f32;
+            let freq_value = freq_values[i];
             let sample_rate = sample_rate as f32;
-            *value = (self.state.frequency * clock_value * -2_f32 / sample_rate) % 2_f32 + 1_f32;
+
+            buffer[i] = (freq_value * clock_value * -2_f32 / sample_rate) % 2_f32 + 1_f32;
         }
     }
 
-    fn fill_pulse(&self, buffer: &mut [f32], clock_values: &[usize], sample_rate: usize) {
-        debug_assert!(buffer.len() == clock_values.len());
-        for (value, clock_value) in buffer.iter_mut().zip(clock_values.iter()) {
-            let clock_value = *clock_value as f32;
+    fn fill_pulse(&self, buffer: &mut [f32], clock_values: &[usize], freq_values: &[f32], sample_rate: usize) {
+        let buffer_len = buffer.len();
+        debug_assert!(buffer_len == clock_values.len() && buffer_len == freq_values.len());
+        for i in 0..buffer_len {
+            let clock_value = clock_values[i] as f32;
+            let freq_value = freq_values[i];
             let sample_rate = sample_rate as f32;
-            let duration_offset = (clock_value * self.state.frequency / sample_rate) % 1_f32;
-            *value = if duration_offset > self.state.pulse_width { 1_f32 } else { -1_f32 };
+
+            let duration_offset = (clock_value * freq_value / sample_rate) % 1_f32;
+            buffer[i] = if duration_offset > self.state.pulse_width { 1_f32 } else { -1_f32 };
         }
     }
 
-    fn fill(&self, buffer: &mut [f32], clock_values: &[usize], sample_rate: usize) {
+    fn fill(
+        &self, buffer: &mut [f32], clock_values: &[usize],
+        freq_override_buffer: &[Option<f32>], sample_rate: usize
+    ) {
+        let buffer_len = buffer.len();
+
+        // Compute frequency per sample
+        let mut freq_values = vec![self.state.frequency; buffer_len];
+        for (freq_value, &freq_override_elem) in freq_values.iter_mut().zip(freq_override_buffer.iter()) {
+            if freq_override_elem.is_some() {
+                *freq_value = freq_override_elem.unwrap();
+            }
+        }
+
         match self.state.waveform {
-            Waveform::Sine     => self.fill_sine(buffer, clock_values, sample_rate),
-            Waveform::Ramp     => self.fill_ramp(buffer, clock_values, sample_rate),
-            Waveform::Saw      => self.fill_saw(buffer, clock_values, sample_rate),
-            Waveform::Pulse    => self.fill_pulse(buffer, clock_values, sample_rate),
+            Waveform::Sine     => self.fill_sine(buffer, clock_values, &freq_values, sample_rate),
+            Waveform::Ramp     => self.fill_ramp(buffer, clock_values, &freq_values, sample_rate),
+            Waveform::Saw      => self.fill_saw(buffer, clock_values, &freq_values, sample_rate),
+            Waveform::Pulse    => self.fill_pulse(buffer, clock_values, &freq_values, sample_rate),
             Waveform::Triangle => todo!()
         }
     }
@@ -123,7 +158,14 @@ impl Oscillator {
 
 impl SignalOutputModule for Oscillator {
     fn fill_output_buffer(&mut self, data: &mut [f32], output_info: &OutputInfo) {
-        self.fill(data, &output_info.current_sample_range, output_info.sample_rate);
+        let buffer_len = data.len();
+
+        // Get freq override input
+        let mut freq_override_module = self.freq_override_input.lock().expect("Lock is poisoned");
+        let mut freq_override_buffer = vec![None; buffer_len];
+        freq_override_module.fill_optional_output_buffer(freq_override_buffer.as_mut_slice(), output_info);
+
+        self.fill(data, &output_info.current_sample_range, &freq_override_buffer, output_info.sample_rate);
     }
 }
 

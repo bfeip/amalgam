@@ -2,6 +2,7 @@ pub mod common;
 pub mod error;
 
 pub mod empty;
+pub mod sample_buffer;
 pub mod noise;
 pub mod oscillator;
 pub mod sequencer;
