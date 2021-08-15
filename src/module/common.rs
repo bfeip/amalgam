@@ -15,11 +15,56 @@ impl<T> IntoMutexPtr for T {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum EdgeDetection {
     Rising,
     Falling,
     Both
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum CompressionMode {
+    None,
+    Compress,
+    Limit
+}
+
+pub fn compress_audio(data: &mut [f32], compression_mode: CompressionMode) {
+    match compression_mode {
+        CompressionMode::None => return,
+        CompressionMode::Compress => {
+            // TODO: This might be the poor man's compression. Should research into doing it proper
+            // Find largest element of the buffer
+            let mut largest_element = 0.0;
+            for datum in data.iter() {
+                let datum_abs = f32::abs(*datum);
+                if datum_abs > largest_element {
+                    largest_element = datum_abs;
+                }
+            }
+
+            if largest_element < 1.0 {
+                // If we're always below the limit then don't try to reduce
+                return;
+            }
+
+            // Reduce all elements by a factor that makes the peaks 1.0 or -1.0
+            let reduction_factor = largest_element;
+            for datum in data.iter_mut() {
+                *datum /= reduction_factor;
+            }
+        }
+        CompressionMode::Limit => {
+            for datum in data.iter_mut() {
+                if *datum > 1.0 {
+                    *datum = 1.0;
+                } 
+                else if *datum < -1.0 {
+                    *datum = -1.0;
+                }
+            }
+        }
+    }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]

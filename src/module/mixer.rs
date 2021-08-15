@@ -1,5 +1,5 @@
 use crate::prelude::*;
-use super::common::{SignalOutputModule, OutputInfo, MutexPtr};
+use super::common::{SignalOutputModule, OutputInfo, MutexPtr, CompressionMode, compress_audio};
 use super::error::*;
 use super::empty::Empty;
 
@@ -31,22 +31,15 @@ impl MixerInput {
     }
 }
 
-#[derive(Copy, Clone)]
-enum MixerCompressMode {
-    None,
-    Compress,
-    Limit
-}
-
 pub struct Mixer {
     inputs: Vec<MixerInput>,
-    compression_mode: MixerCompressMode
+    compression_mode: CompressionMode
 }
 
 impl Mixer {
     pub fn new() -> Self {
         let inputs = Vec::new();
-        let compression_mode = MixerCompressMode::None;
+        let compression_mode = CompressionMode::None;
         Self { inputs, compression_mode }
     }
 
@@ -55,7 +48,7 @@ impl Mixer {
         for _ in 0..n_inputs {
             inputs.push(MixerInput::new());
         }
-        let compression_mode = MixerCompressMode::None;
+        let compression_mode = CompressionMode::None;
         Self { inputs, compression_mode }
     }
 
@@ -111,41 +104,7 @@ impl SignalOutputModule for Mixer {
         }
 
         // Apply compression if needed
-        match self.compression_mode {
-            MixerCompressMode::None => return,
-            MixerCompressMode::Compress => {
-                // TODO: This might be the poor man's compression. Should research into doing it proper
-                // Find largest element of the buffer
-                let mut largest_element = 0.0;
-                for datum in data.iter() {
-                    let datum_abs = f32::abs(*datum);
-                    if datum_abs > largest_element {
-                        largest_element = datum_abs;
-                    }
-                }
-
-                if largest_element < 1.0 {
-                    // If we're always below the limit then don't try to reduce
-                    return;
-                }
-
-                // Reduce all elements by a factor that makes the peaks 1.0 or -1.0
-                let reduction_factor = largest_element;
-                for datum in data.iter_mut() {
-                    *datum /= reduction_factor;
-                }
-            }
-            MixerCompressMode::Limit => {
-                for datum in data.iter_mut() {
-                    if *datum > 1.0 {
-                        *datum = 1.0;
-                    } 
-                    else if *datum < -1.0 {
-                        *datum = -1.0;
-                    }
-                }
-            }
-        }
+        compress_audio(data, self.compression_mode)
     }
 }
 
@@ -182,7 +141,7 @@ mod tests {
         const SAMPLE_RATE: usize = 10_usize;
         const EXPECTED_DATA: [f32; SAMPLE_RATE] = [-2.0, -2.0, 0.0, 0.0, 0.0, 2.0, 2.0, 2.0, 2.0, -2.0];
         let mut mixer = Mixer::new();
-        mixer.compression_mode = MixerCompressMode::None;
+        mixer.compression_mode = CompressionMode::None;
 
         let (mixer_input_1, mixer_input_2) = get_square_and_25_pulse_mixer_inputs();
 
@@ -209,7 +168,7 @@ mod tests {
         const SAMPLE_RATE: usize = 10_usize;
         const EXPECTED_DATA: [f32; SAMPLE_RATE] = [-1.5, -1.5, 0.5, 0.5, 0.5, 1.5, 1.5, 1.5, 1.5, -1.5];
         let mut mixer = Mixer::new();
-        mixer.compression_mode = MixerCompressMode::None;
+        mixer.compression_mode = CompressionMode::None;
 
         let (mut mixer_input_1, mixer_input_2) = get_square_and_25_pulse_mixer_inputs();
         mixer_input_1.level = 0.5;
@@ -237,7 +196,7 @@ mod tests {
         const SAMPLE_RATE: usize = 10_usize;
         const EXPECTED_DATA: [f32; SAMPLE_RATE] = [-1.0, -1.0, 1.0/3.0, 1.0/3.0, 1.0/3.0, 1.0, 1.0, 1.0, 1.0, -1.0];
         let mut mixer = Mixer::new();
-        mixer.compression_mode = MixerCompressMode::Compress;
+        mixer.compression_mode = CompressionMode::Compress;
 
         let (mut mixer_input_1, mixer_input_2) = get_square_and_25_pulse_mixer_inputs();
         mixer_input_1.level = 0.5;
@@ -265,7 +224,7 @@ mod tests {
         const SAMPLE_RATE: usize = 10_usize;
         const EXPECTED_DATA: [f32; SAMPLE_RATE] = [-1.0, -1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, -1.0];
         let mut mixer = Mixer::new();
-        mixer.compression_mode = MixerCompressMode::Limit;
+        mixer.compression_mode = CompressionMode::Limit;
 
         let (mixer_input_1, mixer_input_2) = get_square_and_25_pulse_mixer_inputs();
 
