@@ -32,3 +32,19 @@ impl NoteOutputModule for Empty {
         }
     }
 }
+
+pub struct OptionalEmpty;
+
+impl OptionalEmpty {
+    pub fn new() -> Self {
+        Self {}
+    }
+}
+
+impl OptionalSignalOutputModule for OptionalEmpty {
+    fn fill_optional_output_buffer(&mut self, buffer: &mut[Option<f32>], _output_info: &OutputInfo) {
+        for datum in buffer.iter_mut() {
+            *datum = None;
+        }
+    }
+}

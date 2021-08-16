@@ -1,6 +1,6 @@
 use crate::note;
 use super::common::*;
-use super::empty::Empty;
+use super::empty::OptionalEmpty;
 
 use std::sync::{Arc, Mutex};
 
@@ -52,12 +52,12 @@ impl Oscillator {
     /// Creates a basic sine wave oscillator stream with a default `OscillatorState`
     pub fn new() -> Self {
         let state = OscillatorState::new();
-        let freq_input = Arc::new(Mutex::new(Empty::new()));
+        let freq_input = Arc::new(Mutex::new(OptionalEmpty::new()));
         Oscillator { state, freq_override_input: freq_input }
     }
 
     pub fn from_state(state: &OscillatorState) -> Self {
-        let freq_input = Arc::new(Mutex::new(Empty::new()));
+        let freq_input = Arc::new(Mutex::new(OptionalEmpty::new()));
         Oscillator { state: state.clone(), freq_override_input: freq_input }
     }
 
