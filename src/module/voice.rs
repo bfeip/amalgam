@@ -93,7 +93,7 @@ impl<V: Voice, N: NoteOutputModule> SignalOutputModule for VoiceSet<V, N> {
         };
         debug_assert!(notes_per_sample.len() == buffer_len, "Buffer lengths do not match");
 
-        // Get initial note intervals for notes that are on at the begining of this sample period
+        // Get initial note intervals for notes that are on at the beginning of this sample period
         let mut note_intervals = Vec::new();
         for currently_active_note in self.currently_active_notes.iter().cloned() {
             // Notes that were already active when we start have no start sample
@@ -147,8 +147,8 @@ impl<V: Voice, N: NoteOutputModule> SignalOutputModule for VoiceSet<V, N> {
         // Group remaining note intervals by voice such that they are not overlapping
         for note_interval in note_intervals {
             if note_interval.start_sample.is_none() {
-                // Intervals that were already playing at the begining of the sample period should have been set
-                // up by the previous code block
+                // Intervals that were already playing at the beginning of the sample period should have been set
+                // up by the previous code block (or _a_ previous code block, if this comment is outdated).
                 continue;
             }
             for voice_index in 0..self.max_voices {
@@ -171,10 +171,29 @@ impl<V: Voice, N: NoteOutputModule> SignalOutputModule for VoiceSet<V, N> {
         for (i, voice_entry) in self.voice_entries.iter_mut().enumerate() {
             let mut voice_output = vec![0_f32; buffer_len];
             let intervals = &note_intervals_by_voice[i];
+            if intervals.len() == 0 {
+                // If there's no notes just skip
+                continue;
+            }
+
             voice_entry.voice.fill_output_for_note_intervals(&mut voice_output, intervals, output_info);
             for i in 0..voice_output.len() {
                 buffer[i] += voice_output[i];
             }
+
+            // Check if this is playing a note till the end of the sample. If it is make sure to record
+            // that so we can continue playing it correctly in the next sample period
+            // TODO: Pretty sure note intervals are guaranteed to be in order and thus we don't need to
+            // iterate them like this. But I'm just being safe and I'm too lazy to check right now.
+            let mut currently_playing = None;
+            for interval in intervals {
+                if interval.end_sample.is_none() {
+                    currently_playing = Some(interval.note);
+                    break;
+                }
+            }
+            voice_entry.playing_note = currently_playing;
+            
         }
         compress_audio(buffer, CompressionMode::Compress);
     }
