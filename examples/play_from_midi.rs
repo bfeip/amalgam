@@ -86,11 +86,9 @@ impl module::voice::Voice for ExampleVoice {
                 }
             }
 
-            let note_freq = note_interval.note.to_freq();
             let end_sample = note_interval.end_sample.unwrap_or(buffer_len);
             while sample_counter != end_sample {
                 // Until the note is done playing, push the notes freq value
-                freq_values.push(Some(note_freq));
                 let note_freq = note_interval.note.to_freq();
                 let end_sample = note_interval.end_sample.unwrap_or(buffer_len);
                 while sample_counter != end_sample {

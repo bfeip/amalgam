@@ -40,7 +40,7 @@ impl NoteInterval {
 
 pub trait Voice: Send + Clone {
     /// Called to update a voice to match a reference voice. This should not, for example, reset
-    /// envelopes or change the note that oscillators recieve.
+    /// envelopes or change the note that oscillators receive.
     fn update(&mut self, reference_voice: &Self);
 
     fn fill_output_for_note_intervals(
@@ -57,6 +57,7 @@ pub struct VoiceSet<V: Voice, N: NoteOutputModule> {
     reference_voice: MutexPtr<V>,
     max_voices: usize,
     voice_entries: Vec<VoiceEntry<V>>,
+    next_voice_index: usize, // Used to round robin though voices while playing notes
 
     note_source: MutexPtr<N>,
     currently_active_notes: HashSet<Note>
@@ -78,9 +79,17 @@ impl<V: Voice, N: NoteOutputModule> VoiceSet<V, N> {
                 voice_entries.push(voice_entry)
             }
         }
+        let next_voice_index = 0;
         let currently_active_notes = HashSet::new();
 
-        Self { reference_voice, max_voices, voice_entries, note_source, currently_active_notes }
+        Self {
+            reference_voice,
+            max_voices,
+            voice_entries,
+            next_voice_index,
+            note_source,
+            currently_active_notes
+        }
     }
 }
 
@@ -151,8 +160,9 @@ impl<V: Voice, N: NoteOutputModule> SignalOutputModule for VoiceSet<V, N> {
                 // up by the previous code block (or _a_ previous code block, if this comment is outdated).
                 continue;
             }
-            for voice_index in 0..self.max_voices {
-                let voice_intervals = &mut note_intervals_by_voice[voice_index];
+            for _ in 0..self.max_voices {
+                // Cycle through all voices looking for one to play this interval
+                let voice_intervals = &mut note_intervals_by_voice[self.next_voice_index];
                 let mut overlap = false;
                 for existing_interval in voice_intervals.iter() {
                     if note_interval.overlaps(existing_interval) {
@@ -160,8 +170,11 @@ impl<V: Voice, N: NoteOutputModule> SignalOutputModule for VoiceSet<V, N> {
                         break;
                     }
                 }
+
+                self.next_voice_index = (self.next_voice_index + 1) % self.max_voices;
                 if !overlap {
                     voice_intervals.push(note_interval.clone());
+                    break;
                 }
             }
         }
