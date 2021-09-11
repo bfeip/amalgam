@@ -97,7 +97,6 @@ impl Synth {
             };
 
             let sample_rate = locked_synth.sample_rate;
-            println!("Sample rate: {:#?}", sample_rate);
             let mut sample_clock = locked_synth.master_sample_clock.unwrap();
             let output_module = &mut locked_synth.output_module;
 
