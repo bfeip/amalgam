@@ -90,7 +90,7 @@ impl CpalAudioOutput {
 
         // TODO: Low sample rate for now. Sample rates can get very high
         let _min_sample_rate = supported_config.min_sample_rate(); 
-        let current_config = supported_config.with_sample_rate(cpal::SampleRate(500));
+        let current_config = supported_config.with_sample_rate(cpal::SampleRate(44_100));
 
         // Start setting up the output stream
         let sample_format = current_config.sample_format();
