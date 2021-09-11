@@ -7,10 +7,11 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-cpal="0.12.1"
+cpal="0.13.4"
 rand="0.7.3"
 
 [features]
 default = []
 verbose = ["verbose_midi"]
 verbose_midi = []
+audio_printing = []

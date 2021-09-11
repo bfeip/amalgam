@@ -167,9 +167,11 @@ fn main() -> synth::SynthResult<()> {
     }
 
     // TODO: There's a lot of Arc<Mutex<T>> creation. Maybe they should get wrapped into an object 
-    let midi_note_output = module::midi::midi_note::MidiNoteOutput::new(
+    let mut midi_note_output = module::midi::midi_note::MidiNoteOutput::new(
         midi_base_module.into_mutex_ptr()
     );
+    midi_note_output.set_max_voices(5);
+
     let note_source = Arc::new(Mutex::new(midi_note_output));
     let reference_voice = Arc::new(Mutex::new(ExampleVoice::new()));
     let voice_set = module::voice::VoiceSet::new(reference_voice, 24, note_source);
@@ -181,7 +183,8 @@ fn main() -> synth::SynthResult<()> {
             return Err(synth::SynthError::new(&msg));
         }
     };
-    example_synth.get_output_module_mut().set_audio_input(Box::new(voice_set));
+    let output_module = example_synth.get_output_module_mut();
+    output_module.set_audio_input(Box::new(voice_set));
 
     // TODO: it's annoying to have to crete this as a user. It should be created by the synth
     let mut audio_output = match synth::output::AudioOutput::new(synth::output::OutputDeviceType::Cpal) {

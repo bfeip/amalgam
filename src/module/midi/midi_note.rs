@@ -30,6 +30,14 @@ impl MidiNoteOutput {
         Self { midi_source, priority, max_voices, on_notes }
     }
 
+    pub fn set_max_voices(&mut self, max_voices: u32) {
+        self.max_voices = max_voices;
+    }
+
+    pub fn get_max_voices(&self) -> u32 {
+        self.max_voices
+    }
+
     // Gets all notes that are currently on
     pub fn get_notes_on_absolute(&self) -> ModuleResult<HashSet<u8>> {
         let midi_src = match self.midi_source.lock() {
@@ -63,7 +71,7 @@ impl MidiNoteOutput {
         if on_notes_len as u32 <= self.max_voices {
             // If there are enough voices for all our notes then just send them all
             if self.priority == NotePriority::High || self.priority == NotePriority::Low {
-                // Low and high outputs should be sorted for consistancy
+                // Low and high outputs should be sorted for consistency
                 let mut ret = self.on_notes.clone();
                 ret.sort();
                 return ret

@@ -68,7 +68,29 @@ impl CpalAudioOutput {
             }
         };
 
-        let current_config = supported_config.with_max_sample_rate();
+        // Print configuration details to console if requested
+        #[cfg(feature = "audio_printing")]
+        {
+            let device_name = device.name();
+            if device_name.is_err() {
+                let msg = format!("Not only could we not get a supported config. We also couldn't get the device name"); 
+                return Err(AudioOutputError::new(&msg));
+            }
+            let device_name = device_name.unwrap(); // shadow
+
+            let sample_format = supported_config.sample_format();
+            let min_sample_rate = supported_config.min_sample_rate();
+            let max_sample_rate = supported_config.max_sample_rate();
+            
+            println!(
+                "Device name: {}\nSample format: {:#?}\nMin sample rate: {:#?}\nMax sample rate: {:#?}",
+                device_name, sample_format, min_sample_rate, max_sample_rate
+            );
+        }
+
+        // TODO: Low sample rate for now. Sample rates can get very high
+        let _min_sample_rate = supported_config.min_sample_rate(); 
+        let current_config = supported_config.with_sample_rate(cpal::SampleRate(500));
 
         // Start setting up the output stream
         let sample_format = current_config.sample_format();

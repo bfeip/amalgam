@@ -4,6 +4,9 @@ use super::module::common::{SignalOutputModule, OutputInfo, OutputTimestamp};
 use super::output::{AudioOutput};
 use super::clock;
 
+#[cfg(feature = "audio_printing")]
+use std::time;
+
 use std::sync::{Arc, Mutex};
 
 pub struct Synth {
@@ -94,6 +97,7 @@ impl Synth {
             };
 
             let sample_rate = locked_synth.sample_rate;
+            println!("Sample rate: {:#?}", sample_rate);
             let mut sample_clock = locked_synth.master_sample_clock.unwrap();
             let output_module = &mut locked_synth.output_module;
 
@@ -107,10 +111,27 @@ impl Synth {
             let clock_values = sample_clock.get_range(buffer_length);
             let output_info = OutputInfo::new(sample_rate, channel_count, clock_values, timestamp);
 
+            #[cfg(feature = "audio_printing")]
+            let computation_started = time::Instant::now();
             output_module.fill_output_buffer(&mut f32_buffer, &output_info);
             for i in 0..buffer_length {
                 sample_buffer[i] = T::from(&f32_buffer[i]);
             }
+            #[cfg(feature = "audio_printing")]
+            let computation_ended = time::Instant::now();
+
+            #[cfg(feature = "audio_printing")]
+            {
+                let computation_duration = computation_ended - computation_started;
+                let audio_duration = callback_info.timestamp().playback.duration_since(
+                    &callback_info.timestamp().callback
+                ).unwrap();
+                println!(
+                    "{{\tComputation duration: {:#?}\n\tAudio duration: {:#?}\n}}",
+                    computation_duration, audio_duration
+                )
+            }
+
         };
 
         if let Err(err) = audio_output.set_output_callback(output_callback) {
