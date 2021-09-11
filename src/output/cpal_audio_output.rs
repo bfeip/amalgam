@@ -92,6 +92,10 @@ impl CpalAudioOutput {
         })
     }
 
+    pub fn get_channel_count(&self) -> cpal::ChannelCount {
+        self.current_config.channels()
+    }
+
     /// Gets the format the samples are in i.e. u16, i16, or f32. See `cpal::SampleFormat` for more details.
     pub fn get_sample_format(&self) -> cpal::SampleFormat {
         self.current_config.sample_format()

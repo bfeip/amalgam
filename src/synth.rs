@@ -62,7 +62,7 @@ impl Synth {
             let sample_rate_has_changed = locked_synth.sample_rate != new_sample_rate;
             locked_synth.sample_rate = new_sample_rate;
 
-            // If the clock has not yet been initalized or it's invalid because the sample rate has changed
+            // If the clock has not yet been initialized or it's invalid because the sample rate has changed
             // set up a new clock
             if locked_synth.master_sample_clock.is_none() || sample_rate_has_changed {
                 let clock = clock::SampleClock::new(new_sample_rate);
@@ -78,6 +78,8 @@ impl Synth {
     }
 
     fn play_with_cpal<T: cpal::Sample>(synth: Arc<Mutex<Self>>, audio_output: &mut AudioOutput) -> SynthResult<()> {
+        let channel_count = audio_output.get_channel_count().unwrap();
+
         // Create a callback to pass to CPAL to output the audio. This'll get passed to a different thread that
         // will actually play the audio.
         let output_callback = move |sample_buffer: &mut [T], callback_info: &cpal::OutputCallbackInfo| {
@@ -103,7 +105,7 @@ impl Synth {
 
             let timestamp = OutputTimestamp::new(callback_info.timestamp());
             let clock_values = sample_clock.get_range(buffer_length);
-            let output_info = OutputInfo::new(sample_rate, clock_values, timestamp);
+            let output_info = OutputInfo::new(sample_rate, channel_count, clock_values, timestamp);
 
             output_module.fill_output_buffer(&mut f32_buffer, &output_info);
             for i in 0..buffer_length {

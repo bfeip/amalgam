@@ -371,7 +371,7 @@ mod tests {
     fn create_test_output_info(sample_rate: usize) -> OutputInfo {
         let mut sample_clock = SampleClock::new(sample_rate);
         let sample_range = sample_clock.get_range(sample_rate);
-        OutputInfo::new(sample_rate, sample_range, OutputTimestamp::empty())
+        OutputInfo::new_basic(sample_rate, sample_range)
     }
 
     #[test]

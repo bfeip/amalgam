@@ -153,13 +153,18 @@ pub fn get_test_midi_file_path() -> PathBuf {
 
 fn main() -> synth::SynthResult<()> {
     let midi_file_path = get_test_midi_file_path();
-    let midi_base_module = match module::midi::MidiModuleBase::open(midi_file_path) {
+    let mut midi_base_module = match module::midi::MidiModuleBase::open(midi_file_path) {
         Ok(midi_base_module) => midi_base_module,
         Err(err) => {
             let msg = format!("Failed to create MIDI base module: {}", err);
             return Err(synth::SynthError::new(&msg));
         }
     };
+    // Set track to 1, which is where the actual notes are in this MIDI file
+    if let Err(err) = midi_base_module.set_track(1) {
+        let msg = format!("Failed to set correct MIDI track to read from: {}", err);
+        return Err(synth::SynthError::new(&msg));
+    }
 
     // TODO: There's a lot of Arc<Mutex<T>> creation. Maybe they should get wrapped into an object 
     let midi_note_output = module::midi::midi_note::MidiNoteOutput::new(

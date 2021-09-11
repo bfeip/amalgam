@@ -319,8 +319,7 @@ mod tests {
 
         let mut sample_clock = clock::SampleClock::new(SAMPLE_RATE);
         let sample_range = sample_clock.get_range(N_SAMPLES);
-        let output_timestamp = OutputTimestamp::empty();
-        let output_info = OutputInfo::new(SAMPLE_RATE, sample_range, output_timestamp);
+        let output_info = OutputInfo::new_basic(SAMPLE_RATE, sample_range);
 
         let output = midi_module.get_output(N_SAMPLES, &output_info);
         assert_eq!(output.len(), N_SAMPLES, "Output length does not match expected");

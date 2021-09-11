@@ -51,6 +51,13 @@ impl AudioOutput {
         }
     }
 
+    pub fn get_channel_count(&self) -> Option<cpal::ChannelCount> {
+        match &self.cpal_out {
+            Some(cpal_out) => Some(cpal_out.get_channel_count()),
+            None => None
+        }
+    }
+
     pub fn get_sample_format(&self) -> Option<cpal::SampleFormat> {
         match &self.cpal_out {
             Some(cpal_out) => Some(cpal_out.get_sample_format()),

@@ -176,7 +176,7 @@ impl SignalOutputModule for Envelope {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{module::common::OutputTimestamp, prelude::*};
+    use crate::prelude::*;
     use crate::clock;
 
     struct ConstantTrigger;
@@ -204,8 +204,7 @@ mod tests {
     fn create_output_info(sample_rate: usize, buffer_size: usize) -> OutputInfo {
         let mut clock = clock::SampleClock::new(sample_rate);
         let clock_values = clock.get_range(buffer_size);
-        let timestamp = OutputTimestamp::empty();
-        OutputInfo::new(sample_rate, clock_values, timestamp)
+        OutputInfo::new_basic(sample_rate, clock_values)
     }
 
     #[test]

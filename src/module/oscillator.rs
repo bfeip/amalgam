@@ -172,7 +172,7 @@ impl SignalOutputModule for Oscillator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{module::common::OutputTimestamp, prelude::*};
+    use crate::prelude::*;
     use crate::clock;
 
     fn get_osc_data_with_state(
@@ -185,8 +185,7 @@ mod tests {
 
         let mut clock = clock::SampleClock::new(sample_rate);
         let clock_values = clock.get_range(data_size);
-        let timestamp = OutputTimestamp::empty();
-        let output_info = OutputInfo::new(sample_rate, clock_values, timestamp);
+        let output_info = OutputInfo::new_basic(sample_rate, clock_values);
 
         let mut data = Vec::with_capacity(data_size);
         data.resize(data_size, 0_f32);
