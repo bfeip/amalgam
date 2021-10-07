@@ -271,7 +271,6 @@ impl TrackChunk {
     }
 }
 
-// TODO: This needs many tests
 fn parse_variable_length<T: io::Read>(mut midi_stream: T) -> MidiResult<usize> {
     let mut byte = [0x80_u8; 1];
     let mut bytes = Vec::new();
