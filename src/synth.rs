@@ -106,8 +106,9 @@ impl Synth {
                 f32_buffer.push(0_f32);
             }
 
+            let clock_values_len = buffer_length / channel_count as usize;
             let timestamp = OutputTimestamp::new(callback_info.timestamp());
-            let clock_values = sample_clock.get_range(buffer_length);
+            let clock_values = sample_clock.get_range(clock_values_len);
             let output_info = OutputInfo::new(sample_rate, channel_count, clock_values, timestamp);
 
             #[cfg(feature = "audio_printing")]
