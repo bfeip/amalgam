@@ -126,12 +126,24 @@ impl Synth {
                 let audio_duration = callback_info.timestamp().playback.duration_since(
                     &callback_info.timestamp().callback
                 ).unwrap();
+                
+                let mut max_sample_diff = 0_f32;
+                for sample_pair in f32_buffer.windows(2) {
+                    let sample_diff = (sample_pair[0] - sample_pair[1]).abs();
+                    max_sample_diff = max_sample_diff.max(sample_diff);
+                }
+
                 println!(
-                    "{{\tComputation duration: {:#?}\n\tAudio duration: {:#?}\n}}",
-                    computation_duration, audio_duration
+                    concat!(
+                        "{{",
+                        "\tComputation duration: {:#?}\n",
+                        "\tAudio duration: {:#?}\n",
+                        "\tMax sample diff: {}\n",
+                        "}}"
+                    ),
+                    computation_duration, audio_duration, max_sample_diff
                 )
             }
-
         };
 
         if let Err(err) = audio_output.set_output_callback(output_callback) {
