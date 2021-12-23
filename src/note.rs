@@ -92,7 +92,7 @@ impl Note {
             Tone::GSharp => FREQ_G_SHARP,
         };
     
-        let default_octave = if self.tone <= Tone::C { 4 } else { 5 };
+        let default_octave = if self.tone < Tone::C { 4 } else { 5 };
         let octave_shift = self.octave - default_octave;
     
         // E.g. A4 shifted down one octave is 440 * (2^-1) 
