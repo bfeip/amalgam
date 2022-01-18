@@ -1,7 +1,6 @@
 use std::sync::{Arc, Mutex};
-use std::collections::HashSet;
 
-use crate::note::Note;
+use crate::note::NoteInterval;
 
 pub type MutexPtr<T> = Arc<Mutex<T>>;
 
@@ -127,6 +126,5 @@ impl<T: SignalOutputModule> OptionalSignalOutputModule for T {
 }
 
 pub trait NoteOutputModule: Send {
-    fn get_output(&mut self, n_samples: usize, output_info: &OutputInfo) -> Vec<HashSet<Note>>;
-    fn fill_output_buffer(&mut self, buffer: &mut [HashSet<Note>], output_info: &OutputInfo);
+    fn get_output(&mut self, n_samples: usize, output_info: &OutputInfo) -> Vec<NoteInterval>;
 }

@@ -49,7 +49,7 @@ impl MidiData {
         let track = match self.tracks.get(track_number) {
             Some(track) => track,
             None => {
-                let msg = "Tried to get notes for non-existient track";
+                let msg = "Tried to get notes for non-existent track";
                 return Err(MidiError::new(msg));
             }
         };
@@ -68,13 +68,13 @@ impl MidiData {
         let track = match self.tracks.get(track_number) {
             Some(track) => track,
             None => {
-                let msg = "Tried to get notes for non-existient track";
+                let msg = "Tried to get notes for non-existent track";
                 return Err(MidiError::new(msg));
             }
         };
 
         // x milliseconds * y ticks
-        // ------------------------ = number of ticks in x millsconds
+        // ------------------------ = number of ticks in x milliseconds
         //     1000 milliseconds
         let ticks_per_second = track.ticks_per_second(self.time_division);
         let start_tick = start_time_milliseconds * ticks_per_second / 1000;
@@ -332,12 +332,20 @@ impl NoteDelta {
         Self { ticks_per_second, delta: Vec::new() }
     }
 
+    pub fn get_ticks_per_second(&self) -> usize {
+        self.ticks_per_second
+    }
+
     pub fn iter(&self) -> std::slice::Iter<NoteEvent> {
         self.delta.iter()
     }
 
     pub fn iter_mut(&mut self) -> std::slice::IterMut<NoteEvent> {
         self.delta.iter_mut()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.delta.is_empty()
     }
 }
 
@@ -396,8 +404,8 @@ impl NoteEvent {
         self.velocity
     }
 
-    pub fn get_time_in_milliseconds(&self, note_delta: &NoteDelta) -> usize {
-        tick_position_to_milliseconds(self.time_offset, note_delta.ticks_per_second)
+    pub fn get_time_in_milliseconds(&self, ticks_per_second: usize) -> usize {
+        tick_position_to_milliseconds(self.time_offset, ticks_per_second)
     }
 }
 

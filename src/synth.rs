@@ -12,7 +12,8 @@ use std::sync::{Arc, Mutex};
 pub struct Synth {
     output_module: Output,
     sample_rate: usize,
-    master_sample_clock: Option<clock::SampleClock>
+    master_sample_clock: Option<clock::SampleClock>,
+    pub debug_sample_buffer: Vec<f32>
 }
 
 impl Synth {
@@ -20,8 +21,9 @@ impl Synth {
         let output_module = Output::new();
         let master_sample_clock = None;
         let sample_rate = 0;
+        let debug_sample_buffer = Vec::with_capacity(10_000);
 
-        let synth = Synth { output_module, sample_rate, master_sample_clock };
+        let synth = Synth { output_module, sample_rate, master_sample_clock, debug_sample_buffer };
         Ok(synth)
     }
 
@@ -96,10 +98,6 @@ impl Synth {
                 }
             };
 
-            let sample_rate = locked_synth.sample_rate;
-            let mut sample_clock = locked_synth.master_sample_clock.unwrap();
-            let output_module = &mut locked_synth.output_module;
-
             let buffer_length = sample_buffer.len();
             let mut f32_buffer = Vec::with_capacity(buffer_length);
             for _ in 0..buffer_length {
@@ -108,17 +106,21 @@ impl Synth {
 
             let clock_values_len = buffer_length / channel_count as usize;
             let timestamp = OutputTimestamp::new(callback_info.timestamp());
+            let mut sample_clock = locked_synth.master_sample_clock.unwrap();
             let clock_values = sample_clock.get_range(clock_values_len);
-            let output_info = OutputInfo::new(sample_rate, channel_count, clock_values, timestamp);
+            locked_synth.master_sample_clock = Some(sample_clock);
+            let output_info = OutputInfo::new(locked_synth.sample_rate, channel_count, clock_values, timestamp);
 
             #[cfg(feature = "audio_printing")]
             let computation_started = time::Instant::now();
-            output_module.fill_output_buffer(&mut f32_buffer, &output_info);
+            locked_synth.output_module.fill_output_buffer(&mut f32_buffer, &output_info);
             for i in 0..buffer_length {
                 sample_buffer[i] = T::from(&f32_buffer[i]);
             }
             #[cfg(feature = "audio_printing")]
             let computation_ended = time::Instant::now();
+
+            locked_synth.debug_sample_buffer.extend_from_slice(&f32_buffer);
 
             #[cfg(feature = "audio_printing")]
             {

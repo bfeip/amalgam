@@ -7,6 +7,7 @@ use std::sync::{Arc, Mutex};
 
 use synth::module::common::*;
 use synth::module;
+use synth::note;
 
 struct OscillatorFrequencyOverride {
     freqs: Vec<Option<f32>>
@@ -60,7 +61,7 @@ impl module::voice::Voice for ExampleVoice {
     }
 
     fn fill_output_for_note_intervals(
-        &mut self, sample_buffer: &mut [f32], intervals: &[module::voice::NoteInterval],
+        &mut self, sample_buffer: &mut [f32], intervals: &[note::NoteInterval],
         output_info: &module::common::OutputInfo
     ) {
         assert!(!intervals.is_empty(), "Tried to get output with no note intervals");
@@ -71,26 +72,26 @@ impl module::voice::Voice for ExampleVoice {
         let mut sample_counter = 0_usize;
         for note_interval in intervals {
             // Some checks that note intervals appear in the expected order and do not overlap one another
-            let is_correct_start_note = note_interval.start_sample.is_none() && sample_counter == 0;
-            let is_ordered = note_interval.start_sample.unwrap_or(sample_counter) >= sample_counter;
+            let is_correct_start_note = note_interval.start.is_none() && sample_counter == 0;
+            let is_ordered = note_interval.start.unwrap_or(sample_counter) >= sample_counter;
             assert!(is_correct_start_note || is_ordered, "Overlapping intervals");
             assert!(sample_counter < buffer_len, "Too many samples");
 
             // If start sample is None that means the note started in a previous sample period and we enter this
             // sample period with the note already playing
-            if note_interval.start_sample.is_some() {
-                while sample_counter != note_interval.start_sample.unwrap() {
+            if note_interval.start.is_some() {
+                while sample_counter != note_interval.start.unwrap() {
                     // Until the next note is played just push nothing
                     freq_values.push(None);
                     sample_counter += 1;
                 }
             }
 
-            let end_sample = note_interval.end_sample.unwrap_or(buffer_len);
+            let end_sample = note_interval.end.unwrap_or(buffer_len);
             while sample_counter != end_sample {
                 // Until the note is done playing, push the notes freq value
                 let note_freq = note_interval.note.to_freq();
-                let end_sample = note_interval.end_sample.unwrap_or(buffer_len);
+                let end_sample = note_interval.end.unwrap_or(buffer_len);
                 while sample_counter != end_sample {
                     // Until the note is done playing, push the notes freq value
                     freq_values.push(Some(note_freq));
@@ -167,10 +168,9 @@ fn main() -> synth::SynthResult<()> {
     }
 
     // TODO: There's a lot of Arc<Mutex<T>> creation. Maybe they should get wrapped into an object 
-    let mut midi_note_output = module::midi::midi_note::MidiNoteOutput::new(
+    let midi_note_output = module::midi::midi_note::MidiNoteOutput::new(
         midi_base_module.into_mutex_ptr()
     );
-    midi_note_output.set_max_voices(5);
 
     let note_source = Arc::new(Mutex::new(midi_note_output));
     let reference_voice = Arc::new(Mutex::new(ExampleVoice::new()));
@@ -204,4 +204,7 @@ fn main() -> synth::SynthResult<()> {
 
     // Wait forever
     loop { std::thread::yield_now(); }
+
+    // std::thread::sleep(Duration::from_secs(6));
+    // Ok(())
 }

@@ -2,40 +2,19 @@ use super::super::error::{ModuleError, ModuleResult};
 use super::super::common::{MutexPtr, NoteOutputModule, OutputInfo, OutputTimestamp};
 use super::super::midi::MidiModuleBase;
 use crate::midi;
-use crate::note::Note;
+use crate::note::{Note, NoteInterval};
 
 use std::collections::HashSet;
-use std::ops::DerefMut;
-
-#[derive(Debug, Copy, Clone, PartialEq)]
-enum NotePriority {
-    Low,
-    High,
-    First,
-    Last
-}
 
 pub struct MidiNoteOutput {
     midi_source: MutexPtr<MidiModuleBase>,
-    priority: NotePriority,
-    max_voices: u32,
-    on_notes: Vec<u8>
+    active_notes: HashSet<u8>
 }
 
 impl MidiNoteOutput {
     pub fn new(midi_source: MutexPtr<MidiModuleBase>) -> Self {
-        let priority = NotePriority::Last;
-        let max_voices = 1; // Mono by default
-        let on_notes = Vec::new();
-        Self { midi_source, priority, max_voices, on_notes }
-    }
-
-    pub fn set_max_voices(&mut self, max_voices: u32) {
-        self.max_voices = max_voices;
-    }
-
-    pub fn get_max_voices(&self) -> u32 {
-        self.max_voices
+        let on_notes = HashSet::new();
+        Self { midi_source, active_notes: on_notes }
     }
 
     // Gets all notes that are currently on
@@ -63,50 +42,36 @@ impl MidiNoteOutput {
             }
         };
 
-        midi_src.deref_mut().consume_notes_on_off_delta(n_milliseconds, timestamp)
+        midi_src.consume_notes_on_off_delta(n_milliseconds, timestamp)
     }
 
-    fn get_active_notes(&self) -> Vec<u8> {
-        let on_notes_len = self.on_notes.len();
-        if on_notes_len as u32 <= self.max_voices {
-            // If there are enough voices for all our notes then just send them all
-            if self.priority == NotePriority::High || self.priority == NotePriority::Low {
-                // Low and high outputs should be sorted for consistency
-                let mut ret = self.on_notes.clone();
-                ret.sort();
-                return ret
-            }
-            return self.on_notes.clone();
-        }
-
-        match self.priority {
-            NotePriority::High => {
-                let mut on_notes_by_value = self.on_notes.clone();
-                on_notes_by_value.sort();
-                let split_point = on_notes_len - self.max_voices as usize;
-                let (_, important_notes) = on_notes_by_value.split_at(split_point);
-                important_notes.to_owned()
-            },
-
-            NotePriority::Low => {
-                let mut on_notes_by_value = self.on_notes.clone();
-                on_notes_by_value.sort();
-                let split_point = self.max_voices as usize;
-                let (important_notes, _) = on_notes_by_value.split_at(split_point);
-                important_notes.to_owned()
-            }
-            NotePriority::First => self.on_notes.split_at(self.max_voices as usize).0.to_owned(),
-            NotePriority::Last => self.on_notes.split_at(on_notes_len - self.max_voices as usize).1.to_owned()
-        }
+    fn get_active_notes(&self) -> &HashSet<u8> {
+        &self.active_notes
     }
 }
 
 impl NoteOutputModule for MidiNoteOutput {
-    fn get_output(&mut self, n_samples: usize, output_info: &OutputInfo) -> Vec<HashSet<Note>> {
+    fn get_output(&mut self, n_samples: usize, output_info: &OutputInfo) -> Vec<NoteInterval> {
         // TODO: This does not take retriggers into account. In a normal synth if a note went off and on again
-        // at the same instant the envelope would be retriggered. But that doesn't happen here...
-        let n_milliseconds = n_samples * 1000 / output_info.sample_rate;
-        let note_delta = match self.consume_notes_on_off_delta(n_milliseconds, &output_info.timestamp) {
+        // at the same instant the envelope would be retriggered. But that doesn't happen here... 
+        let mut midi_source_lock = match self.midi_source.lock() {
+            Ok(midi_source_lock) => midi_source_lock,
+            Err(err) => {
+                // TODO: Remove panic. I think that involves changing the signature of MidiMonoNoteOutput
+                panic!("MIDI source lock is poisoned!: {}", err);
+            }
+        };
+
+        // Some timing stuff
+        let sample_period_milliseconds = n_samples * 1000 / output_info.sample_rate; // (n_samples / sample_rate) * 1000
+        dbg!(n_samples);
+        let start_milliseconds = midi_source_lock.get_time();
+        let sample_length_milliseconds = output_info.sample_rate / 1000;
+
+        let note_delta = match midi_source_lock.consume_notes_on_off_delta(
+            sample_period_milliseconds,
+            &output_info.timestamp
+        ) {
             Ok(delta) => delta,
             Err(err) => {
                 // TODO: Remove panic. I think that involves changing the signature of MidiMonoNoteOutput
@@ -114,84 +79,65 @@ impl NoteOutputModule for MidiNoteOutput {
             }
         };
 
-        let mut delta_iter = note_delta.iter();
-        let mut next_delta = match delta_iter.next() {
-            Some(cur_delta) => cur_delta,
-            None => {
-                // There aren't any changes for this sample period.
-                // Do whatever we were doing before.
-                let active_midi_notes = self.get_active_notes();
-                let active_notes_len = active_midi_notes.len();
-                let mut active_notes = HashSet::with_capacity(active_notes_len);
-                for active_midi_note in active_midi_notes {
-                    let active_note = Note::from_midi_note(active_midi_note);
-                    active_notes.insert(active_note);
-                }
-                let mut ret = Vec::with_capacity(n_samples);
-                for _ in 0..n_samples {
-                    ret.push(active_notes.clone());
-                }
-                return ret;
-            }
-        };
-
-        // calculate all the timing stuff
-        let mut next_delta_start_milliseconds = next_delta.get_time_in_milliseconds(&note_delta);
-        let sample_length_milliseconds = output_info.sample_rate / 1000;
-        let start_milliseconds = {
-            // Block in which midi_source is locked
-            let midi_source_lock = match self.midi_source.lock() {
-                Ok(midi_source_lock) => midi_source_lock,
-                Err(err) => {
-                    // TODO: Remove panic. I think that involves changing the signature of MidiMonoNoteOutput
-                    panic!("MIDI source lock is poisoned!: {}", err);
-                }
-            };
-
-            midi_source_lock.get_time()
-        };
-
-        let mut ret = Vec::with_capacity(n_samples);
-        for i in 0..n_samples {
-            // update on_notes to match current sample time
-            let curr_time_milliseconds = start_milliseconds + i * sample_length_milliseconds;
-            while curr_time_milliseconds >= next_delta_start_milliseconds {
-                let delta_note_number = next_delta.get_note_number();
-                match next_delta.get_event_type() {
-                    midi::data::NoteEventType::On => self.on_notes.push(delta_note_number),
-                    midi::data::NoteEventType::Off =>
-                        self.on_notes.retain(|on_note_number| *on_note_number != delta_note_number)
-                }
-
-                // Get next delta if there is one
-                next_delta = match delta_iter.next() {
-                    Some(new_next_delta) => new_next_delta,
-                    None => break // I think?
-                };
-                next_delta_start_milliseconds = next_delta.get_time_in_milliseconds(&note_delta);
-            }
-
-            // Insert correct notes into output vec
+        if note_delta.is_empty() {
+            // There aren't any changes for this sample period.
+            // Do whatever we were doing before.
             let active_midi_notes = self.get_active_notes();
-            let mut active_notes = HashSet::with_capacity(active_midi_notes.len());
-            for active_midi_note in active_midi_notes {
+            let mut intervals = Vec::with_capacity(active_midi_notes.len());
+            for active_midi_note in active_midi_notes.iter().cloned() {
                 let active_note = Note::from_midi_note(active_midi_note);
-                active_notes.insert(active_note);
+                let interval = NoteInterval::new(active_note, None, None);
+                intervals.push(interval);
             }
-
-            ret.push(active_notes);
+            return intervals;
         }
-        ret
-    }
-
-    fn fill_output_buffer(&mut self, buffer: &mut [HashSet<Note>], output_info: &OutputInfo) {
-        // Do this all the lazy way... just calculate the whole thing and copy it over
-        let output = self.get_output(buffer.len(), output_info);
-        debug_assert!(output.len() == buffer.len(), "Output and initial buffer differ in size");
-        for i in 0..output.len() {
-            // TODO: very lazy, get rid of clone... just do a move
-            buffer[i] = output[i].clone();
+        
+        let mut intervals = Vec::new();
+        for active_note in self.get_active_notes().iter().cloned() {
+            // Get initially active notes and make intervals for all of them.
+            // Intervals created here have no start sample since it started in a previous sample period.
+            // They also have no end sample initially though one might be added if a note off event is seen
+            // in this sample period.
+            let note = Note::from_midi_note(active_note);
+            let interval = NoteInterval::new(note, None, None);
+            intervals.push(interval);
         }
+
+        for delta in note_delta.iter() {
+            let delta_start_milliseconds = delta.get_time_in_milliseconds(note_delta.get_ticks_per_second());
+
+            // debug block
+            let first_event_vs_start_time = delta_start_milliseconds as isize - start_milliseconds as isize;
+            dbg!(first_event_vs_start_time);
+            let sample_num = delta_start_milliseconds.saturating_sub(start_milliseconds) / sample_length_milliseconds;
+
+            //let sample_num = (delta_start_milliseconds - start_milliseconds) / sample_length_milliseconds;
+            match delta.get_event_type() {
+                midi::data::NoteEventType::On => {
+                    // When a note turns on we always create a new interval.
+                    // The interval will always have `None` as a end sample. We'll
+                    // fill it in if we see an end event
+                    self.active_notes.insert(delta.get_note_number());
+                    let note = Note::from_midi_note(delta.get_note_number());
+                    let interval = NoteInterval::new(note, Some(sample_num), None);
+                    intervals.push(interval);
+                }
+                midi::data::NoteEventType::Off => {
+                    // When a note turns off we find its corresponding interval and add a end sample.
+                    // This should always find and interval to end. If it doesn't then something is wrong.
+                    self.active_notes.remove(&delta.get_note_number());
+                    let note = Note::from_midi_note(delta.get_note_number());
+
+                    for interval in intervals.iter_mut() {
+                        if interval.note == note && interval.end.is_none() {
+                            interval.end = Some(sample_num);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        intervals
     }
 }
 
@@ -262,61 +208,12 @@ mod tests {
 
     #[test]
     fn get_active_notes() {
-        const ON_NOTES: &[u8] = &[1, 4, 3, 5, 2];
+        let on_notes: HashSet<u8> = HashSet::from([1, 4, 3, 5, 2]);
         let mut midi_module = get_test_midi_module();
-        midi_module.on_notes = ON_NOTES.to_owned();
+        midi_module.active_notes = on_notes.clone();
         
-        midi_module.priority = NotePriority::First;
-        let mut active_notes = midi_module.get_active_notes();
-        assert_eq!(*active_notes, [1]);
-
-        midi_module.priority = NotePriority::Last;
-        active_notes = midi_module.get_active_notes();
-        assert_eq!(*active_notes, [2]);
-
-        midi_module.priority = NotePriority::Low;
-        active_notes = midi_module.get_active_notes();
-        assert_eq!(*active_notes, [1]);
-
-        midi_module.priority = NotePriority::High;
-        active_notes = midi_module.get_active_notes();
-        assert_eq!(*active_notes, [5]);
-
-        midi_module.max_voices = 3;
-
-        midi_module.priority = NotePriority::Low;
-        active_notes = midi_module.get_active_notes();
-        assert_eq!(*active_notes, [1, 2, 3]);
-
-        midi_module.priority = NotePriority::High;
-        active_notes = midi_module.get_active_notes();
-        assert_eq!(*active_notes, [3, 4, 5]);
-
-        midi_module.priority = NotePriority::First;
-        active_notes = midi_module.get_active_notes();
-        assert_eq!(*active_notes, [1, 4, 3]);
-
-        midi_module.priority = NotePriority::Last;
-        active_notes = midi_module.get_active_notes();
-        assert_eq!(*active_notes, [3, 5, 2]);
-
-        midi_module.max_voices = 10;
-
-        midi_module.priority = NotePriority::Low;
-        active_notes = midi_module.get_active_notes();
-        assert_eq!(*active_notes, [1, 2, 3, 4, 5]);
-
-        midi_module.priority = NotePriority::High;
-        active_notes = midi_module.get_active_notes();
-        assert_eq!(*active_notes, [1, 2, 3, 4, 5]);
-
-        midi_module.priority = NotePriority::First;
-        active_notes = midi_module.get_active_notes();
-        assert_eq!(*active_notes, [1, 4, 3, 5, 2]);
-
-        midi_module.priority = NotePriority::Last;
-        active_notes = midi_module.get_active_notes();
-        assert_eq!(*active_notes, [1, 4, 3, 5, 2]);
+        let active_notes = midi_module.get_active_notes();
+        assert_eq!(*active_notes, on_notes);
     }
 
     #[test]

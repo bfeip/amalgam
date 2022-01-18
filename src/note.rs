@@ -102,6 +102,41 @@ impl Note {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Hash)]
+pub struct NoteInterval {
+    pub note: Note,
+    pub start: Option<usize>,
+    pub end: Option<usize>
+}
+
+impl NoteInterval {
+    pub const fn new(note: Note, start: Option<usize>, end: Option<usize>) -> Self {
+        NoteInterval {note, start, end }
+    }
+
+    pub fn overlaps(&self, other: &NoteInterval) -> bool {
+        let this_start = self.start.or(Some(0)).unwrap();
+        let this_end = self.end.or(Some(usize::MAX)).unwrap();
+        let other_start = other.start.or(Some(0)).unwrap();
+        let other_end = other.end.or(Some(usize::MAX)).unwrap();
+
+        if this_start >= other_start && this_start < other_end {
+            // This starts within other
+            return true;
+        } 
+        if this_end > other_start && this_end <= other_end {
+            // This ends within other
+            return true;
+        }
+        if other_start > this_start && other_start < this_end {
+            // Other must be fully contained within this
+            return true;
+        }
+
+        return false;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

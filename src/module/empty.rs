@@ -1,7 +1,5 @@
 use super::common::*;
-use crate::note::Note;
-
-use std::collections::HashSet;
+use crate::note::NoteInterval;
 
 /// A zero sized struct representing a module that outputs nothing
 pub struct Empty;
@@ -22,14 +20,8 @@ impl SignalOutputModule for Empty {
 }
 
 impl NoteOutputModule for Empty {
-    fn get_output(&mut self, n_samples: usize, _output_info: &OutputInfo) -> Vec<HashSet<Note>> {
-        vec![HashSet::new(); n_samples]
-    }
-
-    fn fill_output_buffer(&mut self, buffer: &mut [HashSet<Note>], _output_info: &OutputInfo) {
-        for notes in buffer.iter_mut() {
-            *notes = HashSet::new();
-        }
+    fn get_output(&mut self, _n_samples: usize, _output_info: &OutputInfo) -> Vec<NoteInterval> {
+        Vec::new()
     }
 }
 
