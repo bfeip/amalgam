@@ -44,7 +44,7 @@ impl MidiData {
         &self,
         track_number: usize,
         channel_number: Option<usize>,
-        milliseconds_read: usize
+        microseconds_read: usize
     ) -> MidiResult<HashSet<u8>> {
         let track = match self.tracks.get(track_number) {
             Some(track) => track,
@@ -53,7 +53,7 @@ impl MidiData {
                 return Err(MidiError::new(msg));
             }
         };
-        let tick_position = milliseconds_read * track.ticks_per_second(self.time_division) / 1000;
+        let tick_position = microseconds_read * track.ticks_per_second(self.time_division) / 1_000_000;
 
         track.get_notes_on_absolute(channel_number, tick_position)
     }
@@ -62,8 +62,8 @@ impl MidiData {
         &self,
         track_number: usize,
         channel_number: Option<usize>,
-        start_time_milliseconds: usize, 
-        end_time_milliseconds: usize
+        start_time_microseconds: usize, 
+        end_time_microseconds: usize
     ) -> MidiResult<NoteDelta> {
         let track = match self.tracks.get(track_number) {
             Some(track) => track,
@@ -73,12 +73,14 @@ impl MidiData {
             }
         };
 
-        // x milliseconds * y ticks
-        // ------------------------ = number of ticks in x milliseconds
-        //     1000 milliseconds
+        // x microseconds * y ticks
+        // ------------------------ = number of ticks in x microseconds
+        //  1,000,000 microseconds
+        // TODO: MIDI can be very low precision here. We might want to use floats here in the
+        // future
         let ticks_per_second = track.ticks_per_second(self.time_division);
-        let start_tick = start_time_milliseconds * ticks_per_second / 1000;
-        let end_tick = end_time_milliseconds * ticks_per_second / 1000;
+        let start_tick = start_time_microseconds * ticks_per_second / 1_000_000;
+        let end_tick = end_time_microseconds * ticks_per_second / 1_000_000;
 
         track.get_notes_delta(channel_number, ticks_per_second, start_tick, end_tick)
     }
@@ -404,13 +406,13 @@ impl NoteEvent {
         self.velocity
     }
 
-    pub fn get_time_in_milliseconds(&self, ticks_per_second: usize) -> usize {
-        tick_position_to_milliseconds(self.time_offset, ticks_per_second)
+    pub fn get_time_in_microseconds(&self, ticks_per_second: usize) -> usize {
+        tick_position_to_microseconds(self.time_offset, ticks_per_second)
     }
 }
 
-pub fn tick_position_to_milliseconds(target_tick_position: usize, ticks_per_second: usize) -> usize {
-    target_tick_position * 1000 / ticks_per_second
+pub fn tick_position_to_microseconds(target_tick_position: usize, ticks_per_second: usize) -> usize {
+    target_tick_position * 1_000_000 / ticks_per_second
 }
 
 #[cfg(test)]
@@ -469,9 +471,9 @@ mod tests {
         };
 
         let ticks_per_second = midi_data.get_tracks()[0].ticks_per_second(midi_data.time_division);
-        let target_milliseconds = tick_position_to_milliseconds(5100, ticks_per_second);
+        let target_microseconds = tick_position_to_microseconds(5100, ticks_per_second);
         
-        let notes_on = match midi_data.get_notes_on_absolute(0, Some(2), target_milliseconds) {
+        let notes_on = match midi_data.get_notes_on_absolute(0, Some(2), target_microseconds) {
             Ok(notes_on) => notes_on,
             Err(err) => {
                 panic!("Failed to get notes on: {}", err);

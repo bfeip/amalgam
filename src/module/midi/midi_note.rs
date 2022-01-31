@@ -32,7 +32,7 @@ impl MidiNoteOutput {
     
     /// Gets changes in note state since the last time this was called
     fn consume_notes_on_off_delta(
-        &mut self, n_milliseconds: usize, timestamp: &OutputTimestamp
+        &mut self, n_microseconds: usize, timestamp: &OutputTimestamp
     ) -> ModuleResult<midi::data::NoteDelta> {
         let mut midi_src = match self.midi_source.lock() {
             Ok(midi_src) => midi_src,
@@ -42,7 +42,7 @@ impl MidiNoteOutput {
             }
         };
 
-        midi_src.consume_notes_on_off_delta(n_milliseconds, timestamp)
+        midi_src.consume_notes_on_off_delta(n_microseconds, timestamp)
     }
 
     fn get_active_notes(&self) -> &HashSet<u8> {
@@ -63,13 +63,13 @@ impl NoteOutputModule for MidiNoteOutput {
         };
 
         // Some timing stuff
-        let sample_period_milliseconds = n_samples * 1000 / output_info.sample_rate; // (n_samples / sample_rate) * 1000
-        dbg!(n_samples);
-        let start_milliseconds = midi_source_lock.get_time();
-        let sample_length_milliseconds = output_info.sample_rate / 1000;
+        // (n_samples / sample_rate) * 1,000,000
+        let sample_period_microseconds = n_samples * 1_000_000 / output_info.sample_rate;
+        let start_microseconds = midi_source_lock.get_time();
+        let microseconds_per_sample = sample_period_microseconds / n_samples;
 
         let note_delta = match midi_source_lock.consume_notes_on_off_delta(
-            sample_period_milliseconds,
+            sample_period_microseconds,
             &output_info.timestamp
         ) {
             Ok(delta) => delta,
@@ -104,14 +104,12 @@ impl NoteOutputModule for MidiNoteOutput {
         }
 
         for delta in note_delta.iter() {
-            let delta_start_milliseconds = delta.get_time_in_milliseconds(note_delta.get_ticks_per_second());
+            let delta_start_microseconds = delta.get_time_in_microseconds(note_delta.get_ticks_per_second());
+            // Note: Due to precision loss issues in MIDI it's very possible for this to be negative. If it is,
+            // just play it immediately
+            let sample_num = delta_start_microseconds.saturating_sub(start_microseconds) / microseconds_per_sample;
 
-            // debug block
-            let first_event_vs_start_time = delta_start_milliseconds as isize - start_milliseconds as isize;
-            dbg!(first_event_vs_start_time);
-            let sample_num = delta_start_milliseconds.saturating_sub(start_milliseconds) / sample_length_milliseconds;
-
-            //let sample_num = (delta_start_milliseconds - start_milliseconds) / sample_length_milliseconds;
+            //let sample_num = (delta_start_microseconds - start_microseconds) / microseconds_per_sample;
             match delta.get_event_type() {
                 midi::data::NoteEventType::On => {
                     // When a note turns on we always create a new interval.
@@ -192,8 +190,8 @@ mod tests {
     fn get_notes_on_absolute() {
         let midi_module = get_test_midi_module();
 
-        let target_milliseconds = 8854; // Just trust me bro. It'll have one note on
-        midi_module.midi_source.lock().expect("Failed to lock midi source").set_time(target_milliseconds);
+        let target_microseconds = 8_854_000; // Just trust me bro. It'll have one note on
+        midi_module.midi_source.lock().expect("Failed to lock midi source").set_time(target_microseconds);
         
         let notes_on = match midi_module.get_notes_on_absolute() {
             Ok(notes_on) => notes_on,

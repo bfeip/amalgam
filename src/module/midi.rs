@@ -7,8 +7,8 @@ use super::common::*;
 use std::collections::HashSet;
 
 struct TimestampDuration {
-    start_milliseconds: usize,
-    end_milliseconds: usize
+    start_microseconds: usize,
+    end_microseconds: usize
 }
 
 pub struct MidiModuleBase {
@@ -22,7 +22,7 @@ pub struct MidiModuleBase {
     cache_timestamp_duration: TimestampDuration,
     cached_note_delta: Option<midi::data::NoteDelta>,
 
-    milliseconds_read: usize,
+    microseconds_read: usize,
 }
 
 impl MidiModuleBase {
@@ -40,10 +40,10 @@ impl MidiModuleBase {
         let playing = true;
 
         let cache_timestamp = OutputTimestamp::empty();
-        let cache_timestamp_duration = TimestampDuration{ start_milliseconds: 0, end_milliseconds: 0 };
+        let cache_timestamp_duration = TimestampDuration{ start_microseconds: 0, end_microseconds: 0 };
         let cached_note_delta = None;
 
-        let milliseconds_read = 0;
+        let microseconds_read = 0;
 
         Ok(Self {
             data,
@@ -53,7 +53,7 @@ impl MidiModuleBase {
             cache_timestamp,
             cache_timestamp_duration,
             cached_note_delta,
-            milliseconds_read })
+            microseconds_read })
     }
 
     pub fn set_track(&mut self, track_number: usize) -> ModuleResult<()> {
@@ -80,23 +80,23 @@ impl MidiModuleBase {
         self.channel
     }
 
-    pub fn set_time(&mut self, milliseconds: usize) {
-        self.milliseconds_read = milliseconds;
+    pub fn set_time(&mut self, microseconds: usize) {
+        self.microseconds_read = microseconds;
         self.invalidate_cache();
     }
 
-    pub fn rewind_time(&mut self, milliseconds: usize) {
-        self.milliseconds_read = self.milliseconds_read.saturating_sub(milliseconds);
+    pub fn rewind_time(&mut self, microseconds: usize) {
+        self.microseconds_read = self.microseconds_read.saturating_sub(microseconds);
         self.invalidate_cache();
     }
 
-    pub fn fastforward_time(&mut self, milliseconds: usize) {
-        self.milliseconds_read += milliseconds;
+    pub fn fastforward_time(&mut self, microseconds: usize) {
+        self.microseconds_read += microseconds;
         self.invalidate_cache();
     }
 
     pub fn get_time(&self) -> usize {
-        self.milliseconds_read
+        self.microseconds_read
     }
 
     fn invalidate_cache(&mut self) {
@@ -104,7 +104,7 @@ impl MidiModuleBase {
     }
 
     pub fn get_notes_on_absolute(&self) -> ModuleResult<HashSet<u8>> {
-        let notes_on_result = self.data.get_notes_on_absolute(self.track, self.channel, self.milliseconds_read);
+        let notes_on_result = self.data.get_notes_on_absolute(self.track, self.channel, self.microseconds_read);
         match notes_on_result {
             Ok(notes_on) => Ok(notes_on),
             Err(err) => {
@@ -115,7 +115,7 @@ impl MidiModuleBase {
     }
 
     pub fn consume_notes_on_off_delta(
-        &mut self, n_milliseconds: usize, timestamp: &OutputTimestamp
+        &mut self, n_microseconds: usize, timestamp: &OutputTimestamp
     ) -> ModuleResult<midi::data::NoteDelta> {
         if *timestamp == self.cache_timestamp {
             // We're getting a delta again for the sample range we consumed last time
@@ -128,24 +128,24 @@ impl MidiModuleBase {
                     // We have a re-read the past sample range
                     let duration = &self.cache_timestamp_duration;
                     debug_assert!(
-                        duration.end_milliseconds - duration.start_milliseconds == n_milliseconds,
+                        duration.end_microseconds - duration.start_microseconds == n_microseconds,
                         "Duration we're re-reading now does not match duration we read last time"
                     );
-                    self.milliseconds_read = duration.start_milliseconds;
+                    self.microseconds_read = duration.start_microseconds;
                 }
             }
         }
 
-        let start_milliseconds = self.milliseconds_read;
-        let end_milliseconds = start_milliseconds + n_milliseconds;
+        let start_microseconds = self.microseconds_read;
+        let end_microseconds = start_microseconds + n_microseconds;
 
-        let note_delta_result = self.data.get_notes_delta(self.track, self.channel, start_milliseconds, end_milliseconds);
+        let note_delta_result = self.data.get_notes_delta(self.track, self.channel, start_microseconds, end_microseconds);
         match note_delta_result {
             Ok(notes_delta) => {
                 self.cached_note_delta = Some(notes_delta.clone());
                 self.cache_timestamp = timestamp.clone();
-                self.cache_timestamp_duration = TimestampDuration { start_milliseconds, end_milliseconds };
-                self.milliseconds_read += n_milliseconds;
+                self.cache_timestamp_duration = TimestampDuration { start_microseconds, end_microseconds };
+                self.microseconds_read += n_microseconds;
 
                 Ok(notes_delta)
             },
