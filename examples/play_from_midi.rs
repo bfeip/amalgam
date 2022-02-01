@@ -112,8 +112,15 @@ impl module::voice::Voice for ExampleVoice {
             for (sample, &freq) in sample_buffer.iter_mut().zip(freq_values.iter()) {
                 if freq.is_none() {
                     // Do not play if no note was active
-                    // This is kinda a simple envelope generator
+                    // This is kinda a simple envelope generator in the sense that a real osc would just keep playing.
                     *sample = 0.0;
+                }
+                else {
+                    /*
+                    To get rid of clipping in sample MIDI
+                    TODO: lazy, do actual attenuation loser. Or compression.
+                    */
+                    *sample /= 4_f32;
                 }
             }
         }
