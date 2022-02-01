@@ -35,13 +35,13 @@ impl OptionalSignalOutputModule for OscillatorFrequencyOverride {
 
 #[derive(Clone)]
 struct ExampleVoice {
-    osc: MutexPtr<module::oscillator::Oscillator>,
+    osc: MutexPtr<module::Oscillator>,
     freq_override: MutexPtr<OscillatorFrequencyOverride>
 }
 
 impl ExampleVoice {
     fn new() -> Self {
-        let mut unmutexed_osc = module::oscillator::Oscillator::new();
+        let mut unmutexed_osc = module::Oscillator::new();
         let freq_override = Arc::new(Mutex::new(OscillatorFrequencyOverride::new(Vec::new())));
         unmutexed_osc.set_frequency_override_input(freq_override.clone());
         let osc = Arc::new(Mutex::new(unmutexed_osc));
@@ -49,15 +49,12 @@ impl ExampleVoice {
     }
 }
 
-impl module::voice::Voice for ExampleVoice {
+impl module::Voice for ExampleVoice {
     fn update(&mut self, reference: &Self) {
         let ref_osc = reference.osc.lock().expect("Reference Osc lock is poisoned");
         let mut osc = self.osc.lock().expect("Osc lock is poisoned");
-
-        let ref_state = ref_osc.get_state();
-        let mut state = osc.get_state_mut();
-        state.pulse_width = ref_state.pulse_width;
-        state.waveform = ref_state.waveform;
+        osc.set_pulse_width(ref_osc.get_pulse_width());
+        osc.set_waveform(ref_osc.get_waveform());
     }
 
     fn fill_output_for_note_intervals(
@@ -161,7 +158,7 @@ pub fn get_test_midi_file_path() -> PathBuf {
 
 fn main() -> synth::SynthResult<()> {
     let midi_file_path = get_test_midi_file_path();
-    let mut midi_base_module = match module::midi::MidiModuleBase::open(midi_file_path) {
+    let mut midi_base_module = match module::MidiModuleBase::open(midi_file_path) {
         Ok(midi_base_module) => midi_base_module,
         Err(err) => {
             let msg = format!("Failed to create MIDI base module: {}", err);
@@ -175,7 +172,7 @@ fn main() -> synth::SynthResult<()> {
     }
 
     // TODO: There's a lot of Arc<Mutex<T>> creation. Maybe they should get wrapped into an object 
-    let midi_note_output = module::midi::midi_note::MidiNoteOutput::new(
+    let midi_note_output = module::MidiNoteOutput::new(
         midi_base_module.into_mutex_ptr()
     );
 

@@ -9,7 +9,7 @@ enum Adsr {
     Done
 }
 
-struct Envelope {
+pub struct Envelope {
     sample_rate: f32,
 
     // Times here should be in milliseconds
@@ -27,7 +27,7 @@ struct Envelope {
 }
 
 impl Envelope {
-    fn new(sample_rate: f32) -> Self {
+    pub fn new(sample_rate: f32) -> Self {
         let attack_time = 0.0;
         let decay_time = 0.0;
         let sustain_level = 1.0;
@@ -46,56 +46,56 @@ impl Envelope {
         }
     }
 
-    fn set_attack_time(&mut self, attack_time: f32) {
+    pub fn set_attack_time(&mut self, attack_time: f32) {
         self.attack_time = attack_time;
     }
 
-    fn get_attack_time(&self) -> f32 {
+    pub fn get_attack_time(&self) -> f32 {
         self.attack_time
     }
     
-    fn set_decay_time(&mut self, decay_time: f32) {
+    pub fn set_decay_time(&mut self, decay_time: f32) {
         self.decay_time = decay_time;
     }
 
-    fn get_decay_time(&self) -> f32 {
+    pub fn get_decay_time(&self) -> f32 {
         self.decay_time
     }
 
-    fn set_sustain_level(&mut self, sustain_level: f32) {
+    pub fn set_sustain_level(&mut self, sustain_level: f32) {
         self.sustain_level = sustain_level;
     }
 
-    fn get_sustain_level(&self) -> f32 {
+    pub fn get_sustain_level(&self) -> f32 {
         self.sustain_level
     }
 
-    fn set_release_time(&mut self, release_time: f32) {
+    pub fn set_release_time(&mut self, release_time: f32) {
         self.release_time = release_time;
     }
 
-    fn get_release_time(&self) -> f32 {
+    pub fn get_release_time(&self) -> f32 {
         self.release_time
     }
 
-    fn set_trigger(&mut self, trigger: Box<dyn SignalOutputModule>) {
+    pub fn set_trigger(&mut self, trigger: Box<dyn SignalOutputModule>) {
         self.trigger = trigger;
     }
 
-    fn set_trigger_tolerance(&mut self, trigger_tolerance: f32) {
+    pub fn set_trigger_tolerance(&mut self, trigger_tolerance: f32) {
         self.trigger_tolerance = trigger_tolerance;
     }
 
-    fn get_trigger_tolerance(&self) -> f32 {
+    pub fn get_trigger_tolerance(&self) -> f32 {
         self.trigger_tolerance
     }
 
-    fn trigger(&mut self) {
+    pub fn trigger(&mut self) {
         self.stage = Adsr::Attack;
         self.triggered = true;
     }
 
-    fn release(&mut self) {
+    pub fn release(&mut self) {
         self.stage = Adsr::Release;
         self.triggered = false;
     }
@@ -139,7 +139,7 @@ impl Envelope {
         envelope_value
     }
 
-    fn get(&mut self) -> f32 {
+    pub fn get(&mut self) -> f32 {
         match self.stage {
             Adsr::Attack  => self.get_attack(),
             Adsr::Decay   => self.get_decay(),

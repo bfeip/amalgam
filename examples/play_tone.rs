@@ -17,7 +17,7 @@ fn main() -> SynthResult<()> {
         }
     };
 
-    let oscillator = Box::new(synth::module::oscillator::Oscillator::new());
+    let oscillator = Box::new(synth::module::Oscillator::new());
     synth.get_output_module_mut().set_audio_input(oscillator);
     let synth_mutex_ptr = std::sync::Arc::new(std::sync::Mutex::new(synth));
     let synth_mutex_ptr_clone = synth_mutex_ptr.clone();

@@ -2,16 +2,16 @@ extern crate rand;
 
 use super::common::{SignalOutputModule, OutputInfo};
 
-struct NoiseGenerator {
+pub struct NoiseGenerator {
 }
 
 impl NoiseGenerator {
-    fn new() -> NoiseGenerator {
+    pub fn new() -> NoiseGenerator {
         NoiseGenerator {}
     }
 
     // NOTE: This needs to be in the range of -1.0 to 1.0, so this is wrong
-    fn get<T>(&mut self) -> T 
+    pub fn get<T>(&mut self) -> T 
     where rand::distributions::Standard: rand::distributions::Distribution<T> {
         todo!();
         //rand::random()
