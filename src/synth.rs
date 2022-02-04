@@ -12,14 +12,14 @@ use std::sync::{Arc, Mutex};
 pub struct Synth {
     output_module: Output,
     sample_rate: usize,
-    master_sample_clock: Option<clock::SampleClock>,
+    master_sample_clock: clock::SampleClock,
     pub debug_sample_buffer: Vec<f32>
 }
 
 impl Synth {
     pub fn new() -> SynthResult<Self> {
         let output_module = Output::new();
-        let master_sample_clock = None;
+        let master_sample_clock = clock::SampleClock::new(0);
         let sample_rate = 0;
         let debug_sample_buffer = Vec::with_capacity(10_000);
 
@@ -69,9 +69,9 @@ impl Synth {
 
             // If the clock has not yet been initialized or it's invalid because the sample rate has changed
             // set up a new clock
-            if locked_synth.master_sample_clock.is_none() || sample_rate_has_changed {
+            if sample_rate_has_changed {
                 let clock = clock::SampleClock::new(new_sample_rate);
-                locked_synth.master_sample_clock = Some(clock);
+                locked_synth.master_sample_clock = clock;
             }
         }
 
@@ -104,11 +104,12 @@ impl Synth {
                 f32_buffer.push(0_f32);
             }
 
-            let clock_values_len = buffer_length / channel_count as usize;
             let timestamp = OutputTimestamp::new(callback_info.timestamp());
-            let mut sample_clock = locked_synth.master_sample_clock.unwrap();
+
+            let clock_values_len = buffer_length / channel_count as usize;
+            let mut sample_clock = locked_synth.master_sample_clock;
             let clock_values = sample_clock.get_range(clock_values_len);
-            locked_synth.master_sample_clock = Some(sample_clock);
+            locked_synth.master_sample_clock = sample_clock;
             let output_info = OutputInfo::new(locked_synth.sample_rate, channel_count, clock_values, timestamp);
 
             #[cfg(feature = "audio_printing")]
