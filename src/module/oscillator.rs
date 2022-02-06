@@ -160,14 +160,11 @@ mod tests {
     use crate::prelude::*;
     use crate::clock;
 
-    fn get_osc_data_with_state(
-        state: &OscillatorState,
+    fn get_osc_data(
+        osc: &mut Oscillator,
         data_size: usize,
         sample_rate: usize,
     ) -> Vec<f32> {
-        let mut osc = Oscillator::from_state(state);
-        osc.set_state(state);
-
         let mut clock = clock::SampleClock::new(sample_rate);
         let clock_values = clock.get_range(data_size);
         let output_info = OutputInfo::new_basic(sample_rate, clock_values);
@@ -182,10 +179,10 @@ mod tests {
     #[test]
     fn test_sine() {
         const EXPECTED_DATA: &[f32] = &[1.0, 0.0, -1.0, 0.0];
-        let mut osc_state = OscillatorState::new();
-        osc_state.waveform = Waveform::Sine;
-        osc_state.frequency = 1_f32;
-        let data = get_osc_data_with_state(&osc_state, 4, 4);
+        let mut osc = Oscillator::new();
+        osc.set_waveform(Waveform::Sine);
+        osc.set_frequency(1_f32);
+        let data = get_osc_data(&mut osc, 4, 4);
 
         for i in 0..4 {
             if !float_eq(EXPECTED_DATA[i], data[i], 0.001) {
@@ -200,10 +197,10 @@ mod tests {
     #[test]
     fn test_ramp() {
         const EXPECTED_DATA: &[f32] = &[-0.5, 0.0, 0.5, -1.0];
-        let mut osc_state = OscillatorState::new();
-        osc_state.waveform = Waveform::Ramp;
-        osc_state.frequency = 1_f32;
-        let data = get_osc_data_with_state(&osc_state, 4, 4);
+        let mut osc = Oscillator::new();
+        osc.set_frequency(1_f32);
+        osc.set_waveform(Waveform::Ramp);
+        let data = get_osc_data(&mut osc, 4, 4);
 
         for i in 0..4 {
             if !float_eq(EXPECTED_DATA[i], data[i], 0.001) {
@@ -218,10 +215,10 @@ mod tests {
     #[test]
     fn test_saw() {
         const EXPECTED_DATA: &[f32] = &[0.5, 0.0, -0.5, 1.0];
-        let mut osc_state = OscillatorState::new();
-        osc_state.waveform = Waveform::Saw;
-        osc_state.frequency = 1_f32;
-        let data = get_osc_data_with_state(&osc_state, 4, 4);
+        let mut osc = Oscillator::new();
+        osc.set_waveform(Waveform::Saw);
+        osc.set_frequency(1_f32);
+        let data = get_osc_data(&mut osc, 4, 4);
 
         for i in 0..4 {
             if !float_eq(EXPECTED_DATA[i], data[i], 0.001) {
@@ -236,11 +233,11 @@ mod tests {
     #[test]
     fn test_square() {
         const EXPECTED_DATA: &[f32] = &[-1.0, -1.0, -1.0, -1.0, -1.0, 1.0, 1.0, 1.0, 1.0, -1.0];
-        let mut osc_state = OscillatorState::new();
-        osc_state.waveform = Waveform::Pulse;
-        osc_state.pulse_width = 0.5;
-        osc_state.frequency = 1_f32;
-        let data = get_osc_data_with_state(&osc_state, 10, 10);
+        let mut osc = Oscillator::new();
+        osc.set_waveform(Waveform::Pulse);
+        osc.set_pulse_width(0.5);
+        osc.set_frequency(1_f32);
+        let data = get_osc_data(&mut osc, 10, 10);
 
         for i in 0..10 {
             if !float_eq(EXPECTED_DATA[i], data[i], 0.001) {
@@ -255,11 +252,11 @@ mod tests {
     #[test]
     fn test_25_pulse() {
         const EXPECTED_DATA: &[f32] = &[-1.0, -1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, -1.0];
-        let mut osc_state = OscillatorState::new();
-        osc_state.waveform = Waveform::Pulse;
-        osc_state.pulse_width = 0.25;
-        osc_state.frequency = 1_f32;
-        let data = get_osc_data_with_state(&osc_state, 10, 10);
+        let mut osc = Oscillator::new();
+        osc.set_waveform(Waveform::Pulse);
+        osc.set_pulse_width(0.25);
+        osc.set_frequency(1_f32);
+        let data = get_osc_data(&mut osc, 10, 10);
 
         for i in 0..10 {
             if !float_eq(EXPECTED_DATA[i], data[i], 0.001) {
@@ -274,11 +271,11 @@ mod tests {
     #[test]
     fn test_75_pulse() {
         const EXPECTED_DATA: &[f32] = &[-1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, 1.0, 1.0, -1.0];
-        let mut osc_state = OscillatorState::new();
-        osc_state.waveform = Waveform::Pulse;
-        osc_state.pulse_width = 0.75;
-        osc_state.frequency = 1_f32;
-        let data = get_osc_data_with_state(&osc_state, 10, 10);
+        let mut osc = Oscillator::new();
+        osc.set_waveform(Waveform::Pulse);
+        osc.set_pulse_width(0.75);
+        osc.set_frequency(1_f32);
+        let data = get_osc_data(&mut osc, 10, 10);
 
         for i in 0..10 {
             if !float_eq(EXPECTED_DATA[i], data[i], 0.001) {

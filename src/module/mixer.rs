@@ -115,14 +115,12 @@ mod tests {
     use crate::clock;
 
     fn get_square_and_25_pulse_mixer_inputs() -> (MixerInput, MixerInput) {
-        let mut osc1_state = oscillator::OscillatorState::new();
-        osc1_state.frequency = 1.0;
-        osc1_state.waveform = oscillator::Waveform::Pulse;
-        osc1_state.pulse_width = 0.5;
-        let mut osc2_state = osc1_state.clone();
-        osc2_state.pulse_width = 0.25;
-        let osc1 = oscillator::Oscillator::from_state(&osc1_state);
-        let osc2 = oscillator::Oscillator::from_state(&osc2_state);
+        let mut osc1 = oscillator::Oscillator::new();
+        osc1.set_frequency(1.0);
+        osc1.set_waveform(oscillator::Waveform::Pulse);
+        osc1.set_pulse_width(0.5);
+        let mut osc2 = osc1.clone();
+        osc2.set_pulse_width(0.25);
         let mixer_input_1 = MixerInput::with_input(Arc::new(Mutex::new(osc1)));
         let mixer_input_2 = MixerInput::with_input(Arc::new(Mutex::new(osc2)));
         (mixer_input_1, mixer_input_2)

@@ -203,10 +203,8 @@ mod tests {
             let ref_osc = reference.osc.lock().expect("Reference Osc lock is poisoned");
             let mut osc = self.osc.lock().expect("Osc lock is poisoned");
 
-            let ref_state = ref_osc.get_state();
-            let mut state = osc.get_state_mut();
-            state.pulse_width = ref_state.pulse_width;
-            state.waveform = ref_state.waveform;
+            osc.set_pulse_width(ref_osc.get_pulse_width());
+            osc.set_waveform(ref_osc.get_waveform());
         }
 
         fn fill_output_for_note_intervals(

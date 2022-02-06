@@ -282,11 +282,10 @@ mod tests {
         }
 
         // Set up clock
-        let mut clock_osc_state = oscillator::OscillatorState::new();
-        clock_osc_state.frequency = 1_f32;
-        clock_osc_state.waveform = oscillator::Waveform::Pulse;
-        clock_osc_state.pulse_width = 0.5;
-        let clock_osc = oscillator::Oscillator::from_state(&clock_osc_state);
+        let mut clock_osc = oscillator::Oscillator::new();
+        clock_osc.set_frequency(1_f32);
+        clock_osc.set_waveform(oscillator::Waveform::Pulse);
+        clock_osc.set_pulse_width(0.5);
         sequencer.set_clock(Box::new(clock_osc));
 
         sequencer
