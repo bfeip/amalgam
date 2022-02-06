@@ -433,7 +433,7 @@ mod tests {
         };
 
         let tracks = midi_data.get_tracks();
-        assert!(tracks.len() == 1);
+        assert_eq!(tracks.len(), 2);
     }
 
     #[test]
@@ -443,7 +443,7 @@ mod tests {
             Err(err) => panic!("Failed to parse midi: {}", err)
         };
 
-        let delta = match midi_data.get_notes_delta(0, Some(2), 0, 10_000) {
+        let delta = match midi_data.get_notes_delta(1, Some(0), 0, 10_000_000) {
             Ok(delta) => delta,
             Err(err) => {
                 panic!("Failed to get note delta: {}", err);
@@ -471,9 +471,9 @@ mod tests {
         };
 
         let ticks_per_second = midi_data.get_tracks()[0].ticks_per_second(midi_data.time_division);
-        let target_microseconds = tick_position_to_microseconds(5100, ticks_per_second);
+        let target_microseconds = tick_position_to_microseconds(10, ticks_per_second);
         
-        let notes_on = match midi_data.get_notes_on_absolute(0, Some(2), target_microseconds) {
+        let notes_on = match midi_data.get_notes_on_absolute(1, Some(0), target_microseconds) {
             Ok(notes_on) => notes_on,
             Err(err) => {
                 panic!("Failed to get notes on: {}", err);
@@ -481,6 +481,6 @@ mod tests {
         };
 
         assert_eq!(notes_on.len(), 1, "Expected there to be one note on");
-        assert!(notes_on.contains(&36), "Expected note 36 to be on");
+        assert!(notes_on.contains(&45), "Expected note 45 to be on");
     }
 }

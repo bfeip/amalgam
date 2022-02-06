@@ -143,19 +143,23 @@ impl NoteOutputModule for MidiNoteOutput {
 mod tests {
     use super::*;
     use super::super::super::common::OutputTimestamp;
-    use crate::clock;
     use crate::util::test_util;
 
+    use core::panic;
     use std::sync::{Arc, Mutex};
 
     fn get_test_midi_module() -> MidiNoteOutput {
         let path = test_util::get_test_midi_file_path();
-        let midi_module_base = match MidiModuleBase::open(path) {
+        let mut midi_module_base = match MidiModuleBase::open(path) {
             Ok(midi_module_base) => midi_module_base,
             Err(err) => {
                 panic!("Failed to get midi module base: {}", err);
             }
         };
+
+        if let Err(err) = midi_module_base.set_track(1) {
+            panic!("Failed to set to correct track: {}", err);
+        }
         
         let arc_mutex_midi = Arc::new(Mutex::new(midi_module_base));
         MidiNoteOutput::new(arc_mutex_midi)
@@ -164,9 +168,11 @@ mod tests {
     #[test]
     fn get_notes_delta() {
         let mut midi_module = get_test_midi_module();
-        midi_module.midi_source.lock().expect("Failed to lock midi source").set_channel(Some(2));
+        let mut midi_source_lock = midi_module.midi_source.lock().expect("Failed to lock midi source");
+        midi_source_lock.set_channel(Some(0));
+        drop(midi_source_lock);
 
-        let delta = match midi_module.consume_notes_on_off_delta(10_000, &OutputTimestamp::empty()) {
+        let delta = match midi_module.consume_notes_on_off_delta(10_000_000, &OutputTimestamp::empty()) {
             Ok(delta) => delta,
             Err(err) => {
                 panic!("Failed to get note delta: {}", err);
@@ -190,8 +196,11 @@ mod tests {
     fn get_notes_on_absolute() {
         let midi_module = get_test_midi_module();
 
-        let target_microseconds = 8_854_000; // Just trust me bro. It'll have one note on
-        midi_module.midi_source.lock().expect("Failed to lock midi source").set_time(target_microseconds);
+        let target_microseconds = 5_000_000; // Just trust me bro. It'll have three notes on
+        let mut midi_source_lock = midi_module.midi_source.lock().expect("Failed to lock midi source");
+        midi_source_lock.set_time(target_microseconds);
+        midi_source_lock.set_channel(Some(0));
+        drop(midi_source_lock);
         
         let notes_on = match midi_module.get_notes_on_absolute() {
             Ok(notes_on) => notes_on,
@@ -200,8 +209,12 @@ mod tests {
             }
         };
 
-        assert_eq!(notes_on.len(), 2, "Expected there to be two notes on");
-        assert!(notes_on.contains(&36) && notes_on.contains(&73), "Expected notes 36 & 73 to be on");
+        assert_eq!(notes_on.len(), 3, "Expected there to be three notes on");
+        assert!(notes_on.contains(&55) &&
+                notes_on.contains(&52) &&
+                notes_on.contains(&48),
+                "Expected notes 55, 52 & 73 to be on"
+        );
     }
 
     #[test]
@@ -212,20 +225,5 @@ mod tests {
         
         let active_notes = midi_module.get_active_notes();
         assert_eq!(*active_notes, on_notes);
-    }
-
-    #[test]
-    fn get_mono_output() {
-        const SAMPLE_RATE: usize = 10_000;
-        const N_SAMPLES: usize = SAMPLE_RATE * 10; // 10 seconds
-        let mut midi_module = get_test_midi_module();
-
-        let mut sample_clock = clock::SampleClock::new(SAMPLE_RATE);
-        let sample_range = sample_clock.get_range(N_SAMPLES);
-        let output_info = OutputInfo::new_basic(SAMPLE_RATE, sample_range);
-
-        let output = midi_module.get_output(N_SAMPLES, &output_info);
-        assert_eq!(output.len(), N_SAMPLES, "Output length does not match expected");
-        // Theres not really a great way I can think of to test this...
     }
 }

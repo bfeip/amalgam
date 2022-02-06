@@ -33,7 +33,7 @@ pub mod test_util {
 
 
     pub fn get_test_midi_file_path() -> PathBuf {
-        let test_midi_file_path_from_root: PathBuf = ["data", "never_gonna_give_you_up.mid"].iter().collect();
+        let test_midi_file_path_from_root: PathBuf = ["data", "basic_test.mid"].iter().collect();
         let repo_root = get_repo_root();
         repo_root.join(test_midi_file_path_from_root)
     }

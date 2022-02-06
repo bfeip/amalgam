@@ -79,6 +79,10 @@ impl OutputTimestamp {
     pub fn empty() -> Self {
         Self { timestamp: None }
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.timestamp.is_none()
+    }
 }
 
 pub struct OutputInfo {

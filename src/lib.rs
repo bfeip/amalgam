@@ -15,5 +15,5 @@ pub mod module;
 pub mod output;
 pub mod synth;
 
-pub use synth::Synth;
+pub use crate::synth::Synth;
 pub use error::{SynthError, SynthResult};

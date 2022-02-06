@@ -117,7 +117,7 @@ impl MidiModuleBase {
     pub fn consume_notes_on_off_delta(
         &mut self, n_microseconds: usize, timestamp: &OutputTimestamp
     ) -> ModuleResult<midi::data::NoteDelta> {
-        if *timestamp == self.cache_timestamp {
+        if !timestamp.is_empty() && *timestamp == self.cache_timestamp {
             // We're getting a delta again for the sample range we consumed last time
             match &self.cached_note_delta {
                 Some(cached_note_delta) => {
