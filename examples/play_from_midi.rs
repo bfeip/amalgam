@@ -169,8 +169,7 @@ fn main() -> SynthResult<()> {
         let msg = format!("Failed to set correct MIDI track to read from: {}", err);
         return Err(SynthError::new(&msg));
     }
-
-    // TODO: There's a lot of Arc<Mutex<T>> creation. Maybe they should get wrapped into an object 
+    
     let midi_note_output = module::MidiNoteOutput::new(
         midi_base_module.into()
     );
