@@ -1,18 +1,6 @@
-use std::sync::{Arc, Mutex};
+use std::{sync::{Arc, Mutex, MutexGuard}, ops::Deref};
 
 use crate::note::NoteInterval;
-
-pub type MutexPtr<T> = Arc<Mutex<T>>;
-
-pub trait IntoMutexPtr: Sized {
-    fn into_mutex_ptr(self) -> MutexPtr<Self>;
-}
-
-impl<T> IntoMutexPtr for T {
-    fn into_mutex_ptr(self) -> MutexPtr<Self> {
-        Arc::new(Mutex::new(self))
-    }
-}
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum EdgeDetection {
@@ -131,4 +119,67 @@ impl<T: SignalOutputModule> OptionalSignalOutputModule for T {
 
 pub trait NoteOutputModule: Send {
     fn get_output(&mut self, n_samples: usize, output_info: &OutputInfo) -> Vec<NoteInterval>;
+}
+
+pub struct Connectable<T: ?Sized> {
+    ptr: Arc<Mutex<T>>
+}
+
+impl<T> Connectable<T> {
+    pub fn new(inner: T) -> Self {
+        let ptr = Arc::new(Mutex::new(inner));
+        Self { ptr }
+    }
+}
+
+impl<T: ?Sized> Connectable<T> {
+    pub fn from_arc_mutex(ptr: Arc<Mutex<T>>) -> Self {
+        Self{ ptr }
+    }
+
+    pub fn lock(&self) -> MutexGuard<T> {
+        self.ptr.lock().expect("Lock was poisoned!")
+    }
+}
+
+impl<T> Deref for Connectable<T> {
+    type Target = Arc<Mutex<T>>;
+    fn deref(&self) -> &Self::Target {
+        &self.ptr
+    }
+}
+
+impl<T> From<T> for Connectable<T> {
+    fn from(inner: T) -> Self {
+        Connectable::new(inner)
+    }
+}
+
+macro_rules! connectable_impl_from {
+    ($module_trait:ident) => {
+        impl<T: $module_trait + 'static> From<T> for Connectable<dyn $module_trait> {
+            fn from(inner: T) -> Self {
+                let ptr = Arc::new(Mutex::new(inner));
+                Self { ptr }
+            }
+        }
+        
+        impl<T: $module_trait + 'static> From<Connectable<T>> for Connectable<dyn $module_trait> {
+            fn from(other: Connectable<T>) -> Self {
+                let ptr = other.ptr;
+                Self { ptr }
+            }
+        }
+    };
+}
+
+connectable_impl_from!(SignalOutputModule);
+connectable_impl_from!(NoteOutputModule);
+connectable_impl_from!(OptionalSignalOutputModule);
+
+impl<T: ?Sized> Clone for Connectable<T> {
+    fn clone(&self) -> Self {
+        let ptr = self.ptr.clone();
+        Self { ptr }
+    }
 }

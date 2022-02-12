@@ -1,28 +1,26 @@
 use crate::prelude::*;
-use super::common::{SignalOutputModule, OutputInfo, MutexPtr, CompressionMode, compress_audio};
+use super::common::{SignalOutputModule, OutputInfo, CompressionMode, compress_audio, Connectable};
 use super::error::*;
 use super::empty::Empty;
 
-use std::sync::{Arc, Mutex};
-
 pub struct MixerInput {
-    input: MutexPtr<dyn SignalOutputModule>,
+    input: Connectable<dyn SignalOutputModule>,
     level: f32
 }
 
 impl MixerInput {
     pub fn new() -> Self {
-        let input = Arc::new(Mutex::new(Empty::new()));
+        let input = Empty::new().into();
         let level = 1_f32;
         Self { input, level }
     }
 
-    pub fn with_input(input: MutexPtr<dyn SignalOutputModule>) -> Self {
+    pub fn with_input(input: Connectable<dyn SignalOutputModule>) -> Self {
         let level = 1_f32;
         Self { input, level }
     }
 
-    pub fn set_input(&mut self, input: MutexPtr<dyn SignalOutputModule>) {
+    pub fn set_input(&mut self, input: Connectable<dyn SignalOutputModule>) {
         self.input = input;
     }
 
@@ -88,7 +86,7 @@ impl SignalOutputModule for Mixer {
         data_buffer.resize(data_len, 0.0);
         for i in 0..input_len {
             let input = &mut self.inputs[i];
-            let mut signal_input_lock = input.input.lock().expect("Mixer input lock is poisoned");
+            let mut signal_input_lock = input.input.lock();
             signal_input_lock.fill_output_buffer(&mut data_buffer, output_info);
 
             // Apply the level if we need to
@@ -121,8 +119,8 @@ mod tests {
         osc1.set_pulse_width(0.5);
         let mut osc2 = osc1.clone();
         osc2.set_pulse_width(0.25);
-        let mixer_input_1 = MixerInput::with_input(Arc::new(Mutex::new(osc1)));
-        let mixer_input_2 = MixerInput::with_input(Arc::new(Mutex::new(osc2)));
+        let mixer_input_1 = MixerInput::with_input(osc1.into());
+        let mixer_input_2 = MixerInput::with_input(osc2.into());
         (mixer_input_1, mixer_input_2)
     }
 

@@ -1,4 +1,4 @@
-use super::common::{SignalOutputModule, OutputInfo};
+use super::common::{SignalOutputModule, OutputInfo, Connectable};
 use super::empty::Empty;
 
 enum Adsr {
@@ -21,7 +21,7 @@ pub struct Envelope {
     stage: Adsr,
     previous_value: f32,
 
-    trigger: Box<dyn SignalOutputModule>,
+    trigger: Connectable<dyn SignalOutputModule>,
     trigger_tolerance: f32, // Minimum value at which envelope is triggered
     triggered : bool
 }
@@ -36,7 +36,7 @@ impl Envelope {
         let stage = Adsr::Done;
         let previous_value = 0.0;
 
-        let trigger = Box::new(Empty::new());
+        let trigger = Empty::new().into();
         let trigger_tolerance = 0.5;
         let triggered = false;
 
@@ -78,7 +78,7 @@ impl Envelope {
         self.release_time
     }
 
-    pub fn set_trigger(&mut self, trigger: Box<dyn SignalOutputModule>) {
+    pub fn set_trigger(&mut self, trigger: Connectable<dyn SignalOutputModule>) {
         self.trigger = trigger;
     }
 
@@ -155,7 +155,7 @@ impl SignalOutputModule for Envelope {
         let data_size = data.len();
         let mut trigger_data = Vec::with_capacity(data_size);
         trigger_data.resize(data_size, 0.0);
-        self.trigger.fill_output_buffer(&mut trigger_data, output_info);
+        self.trigger.lock().fill_output_buffer(&mut trigger_data, output_info);
 
         for (i, datum) in data.iter_mut().enumerate() {
             let triggered = trigger_data[i] > self.trigger_tolerance;
@@ -221,7 +221,7 @@ mod tests {
         let output_info = create_output_info(SAMPLE_RATE, EXPECTED_DATA.len());
 
         let trigger = ConstantTrigger {};
-        envelope.set_trigger(Box::new(trigger));
+        envelope.set_trigger(trigger.into());
 
         let mut data = Vec::with_capacity(SAMPLE_RATE * 3);
         data.resize(SAMPLE_RATE * 3, 0.0);
@@ -249,7 +249,7 @@ mod tests {
         let output_info = create_output_info(SAMPLE_RATE, EXPECTED_DATA.len());
 
         let trigger = SplitTrigger {};
-        envelope.set_trigger(Box::new(trigger));
+        envelope.set_trigger(trigger.into());
 
         let mut data = Vec::with_capacity(SAMPLE_RATE * 4);
         data.resize(SAMPLE_RATE * 4, 0.0);

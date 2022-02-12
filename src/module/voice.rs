@@ -19,25 +19,25 @@ struct VoiceEntry<V: Voice> {
 }
 
 pub struct VoiceSet<V: Voice, N: NoteOutputModule> {
-    reference_voice: MutexPtr<V>,
+    reference_voice: Connectable<V>,
     max_voices: usize,
     voice_entries: Vec<VoiceEntry<V>>,
     next_voice_index: usize, // Used to round robin though voices while playing notes
 
-    note_source: MutexPtr<N>,
+    note_source: Connectable<N>,
     currently_active_notes: HashSet<Note>
 }
 
 impl<V: Voice, N: NoteOutputModule> VoiceSet<V, N> {
     /// Creates a new voice box.
-    pub fn new(reference_voice: MutexPtr<V>, max_voices: usize, note_source: MutexPtr<N>) -> Self {
+    pub fn new(reference_voice: Connectable<V>, max_voices: usize, note_source: Connectable<N>) -> Self {
         debug_assert!(max_voices > 0, "Voice set with no voices");
 
         // Create voices
         let mut voice_entries = Vec::with_capacity(max_voices);
         {
             // Lock block
-            let reference_voice_lock = reference_voice.lock().expect("Reference voice lock is poisoned");
+            let reference_voice_lock = reference_voice.lock();
             for _ in 0..max_voices {
                 let voice = reference_voice_lock.clone();
                 let voice_entry = VoiceEntry { voice, playing_note: None };
@@ -63,7 +63,7 @@ impl<V: Voice, N: NoteOutputModule> SignalOutputModule for VoiceSet<V, N> {
         let buffer_len = buffer.len();
 
         let note_intervals = {
-            self.note_source.lock().expect("Failed to lock note source").get_output(buffer_len, output_info)
+            self.note_source.lock().get_output(buffer_len, output_info)
         };
 
         // Setup voices to play the note intervals that were continuing to play from last sample period
@@ -155,7 +155,6 @@ mod tests {
     use crate::note::Tone;
     use crate::clock::SampleClock;
 
-    use std::sync::{Arc, Mutex};
     use std::iter::FromIterator;
 
     struct OscillatorFrequencyOverride {
@@ -163,8 +162,8 @@ mod tests {
     }
 
     impl OscillatorFrequencyOverride {
-        fn new(freqs: Vec<Option<f32>>) -> Self {
-            Self { freqs }
+        fn new() -> Self {
+            Self { freqs: Vec::new() }
         }
 
         fn set(&mut self, freqs: Vec<Option<f32>>) {
@@ -184,24 +183,24 @@ mod tests {
 
     #[derive(Clone)]
     struct TestVoice {
-        osc: MutexPtr<Oscillator>,
-        freq_override: MutexPtr<OscillatorFrequencyOverride>
+        osc: Connectable<Oscillator>,
+        freq_override: Connectable<OscillatorFrequencyOverride>
     }
 
     impl TestVoice {
         fn new() -> Self {
             let mut unmutexed_osc = Oscillator::new();
-            let freq_override = Arc::new(Mutex::new(OscillatorFrequencyOverride::new(Vec::new())));
-            unmutexed_osc.set_frequency_override_input(freq_override.clone());
-            let osc = Arc::new(Mutex::new(unmutexed_osc));
+            let freq_override: Connectable<OscillatorFrequencyOverride> = OscillatorFrequencyOverride::new().into();
+            unmutexed_osc.set_frequency_override_input(freq_override.clone().into());
+            let osc = unmutexed_osc.into();
             Self { osc, freq_override }
         }
     }
 
     impl Voice for TestVoice {
         fn update(&mut self, reference: &Self) {
-            let ref_osc = reference.osc.lock().expect("Reference Osc lock is poisoned");
-            let mut osc = self.osc.lock().expect("Osc lock is poisoned");
+            let ref_osc = reference.osc.lock();
+            let mut osc = self.osc.lock();
 
             osc.set_pulse_width(ref_osc.get_pulse_width());
             osc.set_waveform(ref_osc.get_waveform());
@@ -248,11 +247,11 @@ mod tests {
             }
             {
                 // Lock and set values
-                let mut freq_override = self.freq_override.lock().expect("Lock is poisoned");
+                let mut freq_override = self.freq_override.lock();
                 freq_override.set(freq_values.clone());
             }
 
-            self.osc.lock().unwrap().fill_output_buffer(sample_buffer, output_info);
+            self.osc.lock().fill_output_buffer(sample_buffer, output_info);
             for (sample, &freq) in sample_buffer.iter_mut().zip(freq_values.iter()) {
                 if freq.is_none() {
                     // Do not play if no note was active
@@ -300,7 +299,7 @@ mod tests {
         
         let ref_voice = TestVoice::new();
         let note_source = TestNoteSource::new(notes);
-        let mut voice_set = VoiceSet::new(Arc::new(Mutex::new(ref_voice)), 5, Arc::new(Mutex::new(note_source)));
+        let mut voice_set = VoiceSet::new(ref_voice.into(), 5, Connectable::<TestNoteSource>::from(note_source));
 
         let output_info = create_test_output_info(100);
         let mut output_buffer = [0_f32; 100];
@@ -321,7 +320,7 @@ mod tests {
 
         let ref_voice = TestVoice::new();
         let note_source = TestNoteSource::new(notes);
-        let mut voice_set = VoiceSet::new(Arc::new(Mutex::new(ref_voice)), 1, Arc::new(Mutex::new(note_source)));
+        let mut voice_set = VoiceSet::new(ref_voice.into(), 1, Connectable::<TestNoteSource>::from(note_source));
 
         let output_info = create_test_output_info(100);
         let mut output_buffer = [0_f32; 100];

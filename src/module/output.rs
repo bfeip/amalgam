@@ -1,4 +1,4 @@
-use super::common::{SignalOutputModule, OutputInfo};
+use super::common::{Connectable, SignalOutputModule, OutputInfo};
 use super::empty::Empty;
 
 /// A structure representing controls that would typically be on a output module
@@ -6,14 +6,14 @@ use super::empty::Empty;
 pub struct Output {
     volume: f32,
     panning: f32,
-    audio_input: Box<dyn SignalOutputModule>,
+    audio_input: Connectable<dyn SignalOutputModule>,
 }
 
 impl Output {
     pub fn new() -> Self {
         let volume = 1.0;
         let panning = 0.5;
-        let audio_input = Box::new(Empty::new());
+        let audio_input = Empty::new().into();
 
         Self { volume, panning, audio_input }
     }
@@ -26,7 +26,7 @@ impl Output {
         self.panning = panning;
     }
 
-    pub fn set_audio_input(&mut self, audio_input: Box<dyn SignalOutputModule>) {
+    pub fn set_audio_input(&mut self, audio_input: Connectable<dyn SignalOutputModule>) {
         self.audio_input = audio_input;
     }
 }
@@ -45,7 +45,7 @@ impl SignalOutputModule for Output {
         let mut mono_channel_buffer = vec![0.0; mono_channel_len];
 
         // Get the audio for the one channel
-        self.audio_input.fill_output_buffer(&mut mono_channel_buffer, output_info);
+        self.audio_input.lock().fill_output_buffer(&mut mono_channel_buffer, output_info);
 
         // fill the final buffer with multi-channel data
         let output_chunk_iter = data.chunks_mut(channel_count_usize);

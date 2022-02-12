@@ -1,32 +1,26 @@
-use super::super::error::{ModuleError, ModuleResult};
-use super::super::common::{MutexPtr, NoteOutputModule, OutputInfo, OutputTimestamp};
+use super::super::error::ModuleResult;
+use super::super::common::{NoteOutputModule, OutputInfo, OutputTimestamp};
 use super::super::midi::MidiModuleBase;
 use crate::midi;
+use crate::module::common::Connectable;
 use crate::note::{Note, NoteInterval};
 
 use std::collections::HashSet;
 
 pub struct MidiNoteOutput {
-    midi_source: MutexPtr<MidiModuleBase>,
+    midi_source: Connectable<MidiModuleBase>,
     active_notes: HashSet<u8>
 }
 
 impl MidiNoteOutput {
-    pub fn new(midi_source: MutexPtr<MidiModuleBase>) -> Self {
+    pub fn new(midi_source: Connectable<MidiModuleBase>) -> Self {
         let on_notes = HashSet::new();
         Self { midi_source, active_notes: on_notes }
     }
 
     // Gets all notes that are currently on
     pub fn get_notes_on_absolute(&self) -> ModuleResult<HashSet<u8>> {
-        let midi_src = match self.midi_source.lock() {
-            Ok(midi_src) => midi_src,
-            Err(err) => {
-                let msg = format!("Failed to get notes from MIDI file. Lock is poisoned!: {}", err);
-                return Err(ModuleError::new(&msg));
-            }
-        };
-
+        let midi_src = self.midi_source.lock();
         midi_src.get_notes_on_absolute()
     }
     
@@ -34,14 +28,7 @@ impl MidiNoteOutput {
     fn consume_notes_on_off_delta(
         &mut self, n_microseconds: usize, timestamp: &OutputTimestamp
     ) -> ModuleResult<midi::data::NoteDelta> {
-        let mut midi_src = match self.midi_source.lock() {
-            Ok(midi_src) => midi_src,
-            Err(err) => {
-                let msg = format!("Failed to get notes from MIDI file. Lock is poisoned!: {}", err);
-                return Err(ModuleError::new(&msg));
-            }
-        };
-
+        let mut midi_src = self.midi_source.lock();
         midi_src.consume_notes_on_off_delta(n_microseconds, timestamp)
     }
 
@@ -54,13 +41,7 @@ impl NoteOutputModule for MidiNoteOutput {
     fn get_output(&mut self, n_samples: usize, output_info: &OutputInfo) -> Vec<NoteInterval> {
         // TODO: This does not take retriggers into account. In a normal synth if a note went off and on again
         // at the same instant the envelope would be retriggered. But that doesn't happen here... 
-        let mut midi_source_lock = match self.midi_source.lock() {
-            Ok(midi_source_lock) => midi_source_lock,
-            Err(err) => {
-                // TODO: Remove panic. I think that involves changing the signature of MidiMonoNoteOutput
-                panic!("MIDI source lock is poisoned!: {}", err);
-            }
-        };
+        let mut midi_source_lock = self.midi_source.lock();
 
         // Some timing stuff
         // (n_samples / sample_rate) * 1,000,000
@@ -146,7 +127,6 @@ mod tests {
     use crate::util::test_util;
 
     use core::panic;
-    use std::sync::{Arc, Mutex};
 
     fn get_test_midi_module() -> MidiNoteOutput {
         let path = test_util::get_test_midi_file_path();
@@ -161,14 +141,13 @@ mod tests {
             panic!("Failed to set to correct track: {}", err);
         }
         
-        let arc_mutex_midi = Arc::new(Mutex::new(midi_module_base));
-        MidiNoteOutput::new(arc_mutex_midi)
+        MidiNoteOutput::new(midi_module_base.into())
     }
 
     #[test]
     fn get_notes_delta() {
         let mut midi_module = get_test_midi_module();
-        let mut midi_source_lock = midi_module.midi_source.lock().expect("Failed to lock midi source");
+        let mut midi_source_lock = midi_module.midi_source.lock();
         midi_source_lock.set_channel(Some(0));
         drop(midi_source_lock);
 
@@ -197,7 +176,7 @@ mod tests {
         let midi_module = get_test_midi_module();
 
         let target_microseconds = 5_000_000; // Just trust me bro. It'll have three notes on
-        let mut midi_source_lock = midi_module.midi_source.lock().expect("Failed to lock midi source");
+        let mut midi_source_lock = midi_module.midi_source.lock();
         midi_source_lock.set_time(target_microseconds);
         midi_source_lock.set_channel(Some(0));
         drop(midi_source_lock);

@@ -1,4 +1,4 @@
-use super::common::{SignalOutputModule, OutputInfo, EdgeDetection};
+use super::common::{SignalOutputModule, OutputInfo, EdgeDetection, Connectable};
 use super::error::*;
 use super::empty::Empty;
 
@@ -29,7 +29,7 @@ pub struct Sequencer {
     cycle: bool,
     current_step: usize,
 
-    clock: Box<dyn SignalOutputModule>,
+    clock: Connectable<dyn SignalOutputModule>,
     edge_detection: EdgeDetection,
     edge_tolerance: f32
 }
@@ -41,7 +41,7 @@ impl Sequencer {
         let cycle = true;
         let current_step = 0_usize;
 
-        let clock = Box::new(Empty::new());
+        let clock = Empty::new().into();
         let edge_detection = EdgeDetection::Falling;
         let edge_tolerance = 0.8_f32;
         Self { steps, playing, cycle, current_step, clock, edge_detection, edge_tolerance }
@@ -57,7 +57,7 @@ impl Sequencer {
         let cycle = true;
         let current_step = 0_usize;
 
-        let clock = Box::new(Empty::new());
+        let clock = Empty::new().into();
         let edge_detection = EdgeDetection::Falling;
         let edge_tolerance = 0.8_f32;
         Self { steps, playing, cycle, current_step, clock, edge_detection, edge_tolerance }
@@ -167,7 +167,7 @@ impl Sequencer {
         self.playing = false;
     }
 
-    pub fn set_clock(&mut self, clock: Box<dyn SignalOutputModule>) {
+    pub fn set_clock(&mut self, clock: Connectable<dyn SignalOutputModule>) {
         self.clock = clock;
     }
 
@@ -230,7 +230,7 @@ impl SignalOutputModule for Sequencer {
             // We are playing which means which step we are on is subject to change
             let mut clock_signals = Vec::with_capacity(data_size);
             clock_signals.resize(data_size, 0_f32); // NOTE: initializing this vec isn't really needed, but is safe
-            self.clock.fill_output_buffer(&mut clock_signals, output_info);
+            self.clock.lock().fill_output_buffer(&mut clock_signals, output_info);
             println!("{:?}", clock_signals);
             let mut data_filled = 0_usize;
             for i in 1..data_size {
@@ -286,7 +286,7 @@ mod tests {
         clock_osc.set_frequency(1_f32);
         clock_osc.set_waveform(oscillator::Waveform::Pulse);
         clock_osc.set_pulse_width(0.5);
-        sequencer.set_clock(Box::new(clock_osc));
+        sequencer.set_clock(clock_osc.into());
 
         sequencer
     }

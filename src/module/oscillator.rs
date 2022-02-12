@@ -2,8 +2,6 @@ use crate::note;
 use super::common::*;
 use super::empty::OptionalEmpty;
 
-use std::sync::{Arc, Mutex};
-
 const PI: f32 = std::f64::consts::PI as f32;
 const TAU: f32 = PI * 2.0;
 const U16_MID: u16 = u16::MAX / 2;
@@ -27,7 +25,7 @@ pub struct Oscillator {
     frequency: f32,
     /// Width of the pulse. Only used for pulse waveforms. 50% is square, 0% and 100% are silent
     pulse_width: f32,
-    freq_override_input: MutexPtr<dyn OptionalSignalOutputModule>
+    freq_override_input: Connectable<dyn OptionalSignalOutputModule>
 }
 
 impl Oscillator {
@@ -36,7 +34,7 @@ impl Oscillator {
         let waveform = Waveform::Sine;
         let frequency = note::FREQ_C;
         let pulse_width = 0.5;
-        let freq_override_input = Arc::new(Mutex::new(OptionalEmpty::new()));
+        let freq_override_input = OptionalEmpty::new().into();
         Oscillator { waveform, frequency, pulse_width, freq_override_input }
     }
 
@@ -64,7 +62,9 @@ impl Oscillator {
         self.pulse_width
     }
 
-    pub fn set_frequency_override_input(&mut self, override_input: MutexPtr<dyn OptionalSignalOutputModule>) {
+    pub fn set_frequency_override_input(
+        &mut self, override_input: Connectable<dyn OptionalSignalOutputModule>
+    ) {
         self.freq_override_input = override_input;
     }
 
@@ -146,8 +146,8 @@ impl SignalOutputModule for Oscillator {
         let buffer_len = data.len();
 
         // Get freq override input
-        let mut freq_override_module = self.freq_override_input.lock().expect("Lock is poisoned");
         let mut freq_override_buffer = vec![None; buffer_len];
+        let mut freq_override_module = self.freq_override_input.lock();
         freq_override_module.fill_optional_output_buffer(freq_override_buffer.as_mut_slice(), output_info);
 
         self.fill(data, &output_info.current_sample_range, &freq_override_buffer, output_info.sample_rate);
