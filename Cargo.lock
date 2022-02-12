@@ -25,6 +25,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "amalgam"
+version = "0.1.0"
+dependencies = [
+ "cpal",
+ "rand",
+]
+
+[[package]]
 name = "autocfg"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -732,14 +740,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-xid",
-]
-
-[[package]]
-name = "synth"
-version = "0.1.0"
-dependencies = [
- "cpal",
- "rand",
 ]
 
 [[package]]

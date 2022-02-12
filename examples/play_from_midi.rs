@@ -1,21 +1,20 @@
-extern crate synth;
+extern crate amalgam;
 
 use std::env;
 use std::fs;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
 
-use synth::module::common::*;
-use synth::module;
-use synth::note;
+use amalgam::module::common::*;
+use amalgam::{module, note, output, Synth};
+use amalgam::error::*;
 
 struct OscillatorFrequencyOverride {
     freqs: Vec<Option<f32>>
 }
 
 impl OscillatorFrequencyOverride {
-    fn new(freqs: Vec<Option<f32>>) -> Self {
-        Self { freqs }
+    fn new() -> Self {
+        Self { freqs: Vec::new() }
     }
 
     fn set(&mut self, freqs: Vec<Option<f32>>) {
@@ -35,24 +34,24 @@ impl OptionalSignalOutputModule for OscillatorFrequencyOverride {
 
 #[derive(Clone)]
 struct ExampleVoice {
-    osc: MutexPtr<module::Oscillator>,
-    freq_override: MutexPtr<OscillatorFrequencyOverride>
+    osc: Connectable<module::Oscillator>,
+    freq_override: Connectable<OscillatorFrequencyOverride>
 }
 
 impl ExampleVoice {
     fn new() -> Self {
         let mut unmutexed_osc = module::Oscillator::new();
-        let freq_override = Arc::new(Mutex::new(OscillatorFrequencyOverride::new(Vec::new())));
-        unmutexed_osc.set_frequency_override_input(freq_override.clone());
-        let osc = Arc::new(Mutex::new(unmutexed_osc));
+        let freq_override: Connectable<OscillatorFrequencyOverride> = OscillatorFrequencyOverride::new().into();
+        unmutexed_osc.set_frequency_override_input(freq_override.clone().into());
+        let osc = unmutexed_osc.into();
         Self { osc, freq_override }
     }
 }
 
 impl module::Voice for ExampleVoice {
     fn update(&mut self, reference: &Self) {
-        let ref_osc = reference.osc.lock().expect("Reference Osc lock is poisoned");
-        let mut osc = self.osc.lock().expect("Osc lock is poisoned");
+        let ref_osc = reference.osc.lock();
+        let mut osc = self.osc.lock();
         osc.set_pulse_width(ref_osc.get_pulse_width());
         osc.set_waveform(ref_osc.get_waveform());
     }
@@ -101,11 +100,11 @@ impl module::Voice for ExampleVoice {
             }
             {
                 // Lock and set values
-                let mut freq_override = self.freq_override.lock().expect("Lock is poisoned");
+                let mut freq_override = self.freq_override.lock();
                 freq_override.set(freq_values.clone());
             }
 
-            self.osc.lock().unwrap().fill_output_buffer(sample_buffer, output_info);
+            self.osc.lock().fill_output_buffer(sample_buffer, output_info);
             for (sample, &freq) in sample_buffer.iter_mut().zip(freq_values.iter()) {
                 if freq.is_none() {
                     // Do not play if no note was active
@@ -156,54 +155,54 @@ pub fn get_test_midi_file_path() -> PathBuf {
     repo_root.join(test_midi_file_path_from_root)
 }
 
-fn main() -> synth::SynthResult<()> {
+fn main() -> SynthResult<()> {
     let midi_file_path = get_test_midi_file_path();
     let mut midi_base_module = match module::MidiModuleBase::open(midi_file_path) {
         Ok(midi_base_module) => midi_base_module,
         Err(err) => {
             let msg = format!("Failed to create MIDI base module: {}", err);
-            return Err(synth::SynthError::new(&msg));
+            return Err(SynthError::new(&msg));
         }
     };
     // Set track to 1, which is where the actual notes are in this MIDI file
     if let Err(err) = midi_base_module.set_track(1) {
         let msg = format!("Failed to set correct MIDI track to read from: {}", err);
-        return Err(synth::SynthError::new(&msg));
+        return Err(SynthError::new(&msg));
     }
 
     // TODO: There's a lot of Arc<Mutex<T>> creation. Maybe they should get wrapped into an object 
     let midi_note_output = module::MidiNoteOutput::new(
-        midi_base_module.into_mutex_ptr()
+        midi_base_module.into()
     );
 
-    let note_source = Arc::new(Mutex::new(midi_note_output));
-    let reference_voice = Arc::new(Mutex::new(ExampleVoice::new()));
+    let note_source: Connectable<dyn NoteOutputModule> = midi_note_output.into();
+    let reference_voice = ExampleVoice::new().into();
     let voice_set = module::voice::VoiceSet::new(reference_voice, 24, note_source);
 
-    let mut example_synth = match synth::Synth::new() {
+    let mut example_synth = match Synth::new() {
         Ok(synth) => synth,
         Err(err) => {
             let msg = format!("Failed to create synth: {}", err);
-            return Err(synth::SynthError::new(&msg));
+            return Err(SynthError::new(&msg));
         }
     };
     let output_module = example_synth.get_output_module_mut();
-    output_module.set_audio_input(Box::new(voice_set));
+    output_module.set_audio_input(voice_set.into());
 
     // TODO: it's annoying to have to crete this as a user. It should be created by the synth
-    let mut audio_output = match synth::output::AudioOutput::new(synth::output::OutputDeviceType::Cpal) {
+    let mut audio_output = match output::AudioOutput::new(output::OutputDeviceType::Cpal) {
         Ok(audio_output) => audio_output,
         Err(err) => {
             let msg = format!("Failed to example output: failed to create audio output: {}", err);
-            return Err(synth::SynthError::new(&msg));
+            return Err(SynthError::new(&msg));
         }
     };
 
     let synth_mutex_ptr = std::sync::Arc::new(std::sync::Mutex::new(example_synth));
 
-    if let Err(err) = synth::Synth::play(synth_mutex_ptr, &mut audio_output) {
+    if let Err(err) = Synth::play(synth_mutex_ptr, &mut audio_output) {
         let msg = format!("Failed to test full synth: {}", err);
-        return Err(synth::SynthError::new(&msg));
+        return Err(SynthError::new(&msg));
     }
 
     // Wait forever

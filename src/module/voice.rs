@@ -18,7 +18,11 @@ struct VoiceEntry<V: Voice> {
     playing_note: Option<Note>
 }
 
-pub struct VoiceSet<V: Voice, N: NoteOutputModule> {
+pub struct VoiceSet<V, N>
+where 
+    V: Voice + ?Sized,
+    N: NoteOutputModule + ?Sized
+{
     reference_voice: Connectable<V>,
     max_voices: usize,
     voice_entries: Vec<VoiceEntry<V>>,
@@ -28,7 +32,11 @@ pub struct VoiceSet<V: Voice, N: NoteOutputModule> {
     currently_active_notes: HashSet<Note>
 }
 
-impl<V: Voice, N: NoteOutputModule> VoiceSet<V, N> {
+impl<V, N> VoiceSet<V, N>
+where 
+    V: Voice + ?Sized,
+    N: NoteOutputModule + ?Sized
+{
     /// Creates a new voice box.
     pub fn new(reference_voice: Connectable<V>, max_voices: usize, note_source: Connectable<N>) -> Self {
         debug_assert!(max_voices > 0, "Voice set with no voices");
@@ -58,7 +66,11 @@ impl<V: Voice, N: NoteOutputModule> VoiceSet<V, N> {
     }
 }
 
-impl<V: Voice, N: NoteOutputModule> SignalOutputModule for VoiceSet<V, N> {
+impl<V, N> SignalOutputModule for VoiceSet<V, N>
+where 
+    V: Voice + ?Sized,
+    N: NoteOutputModule + ?Sized
+{
     fn fill_output_buffer(&mut self, buffer: &mut [f32], output_info: &OutputInfo) {
         let buffer_len = buffer.len();
 
