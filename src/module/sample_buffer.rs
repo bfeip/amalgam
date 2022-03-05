@@ -1,11 +1,11 @@
 use super::common::*;
 
-struct SampleBuffer {
+pub struct SampleBuffer {
     samples: Vec<f32>,
 }
 
 impl SampleBuffer {
-    fn new(samples: Vec<f32>) -> Self {
+    pub fn new(samples: Vec<f32>) -> Self {
         Self { samples }
     }
 }
