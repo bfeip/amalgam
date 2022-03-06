@@ -1,14 +1,14 @@
 use super::common::{Connectable, SignalOutputModule, OutputInfo};
 use super::Empty;
 
-struct Attenuator {
+struct Attenuverter {
     signal_in: Connectable<dyn SignalOutputModule>,
     control_in: Connectable<dyn SignalOutputModule>,
     gain: f32,
     control_gain: f32,
 }
 
-impl Attenuator {
+impl Attenuverter {
     fn new() -> Self {
         let signal_in = Empty::new().into();
         let control_in = Empty::new().into();
@@ -34,7 +34,7 @@ impl Attenuator {
     }
 }
 
-impl SignalOutputModule for Attenuator {
+impl SignalOutputModule for Attenuverter {
     fn fill_output_buffer(&mut self, buffer: &mut [f32], output_info: &OutputInfo) {
         let buffer_len = buffer.len();
 
@@ -55,8 +55,8 @@ impl SignalOutputModule for Attenuator {
         for i in 0..buffer_len {
             let control_datum = control[i];
             let amplitude_factor = 1_f32.min(control_datum + self.gain); // control + gain or 1.0 if > 1
-            let attenuated_datum = raw_signal[i] * amplitude_factor;
-            buffer[i] = attenuated_datum;
+            let attenuverted_datum = raw_signal[i] * amplitude_factor;
+            buffer[i] = attenuverted_datum;
         }
     }
 }
@@ -75,35 +75,47 @@ mod tests {
         sample_buffer.into()
     }
 
-    fn get_attenuator_output(attenuator: &mut Attenuator) -> Vec<f32> {
+    fn get_attenuverter_output(attenuverter: &mut Attenuverter) -> Vec<f32> {
         let mut clock = SampleClock::new(SAMPLE_RATE);
         let clock_values = clock.get_range(SAMPLE_RATE);
         let output_info = OutputInfo::new_basic(SAMPLE_RATE, clock_values);
 
         let mut output_buffer = vec![0_f32; SAMPLE_RATE];
-        attenuator.fill_output_buffer(&mut output_buffer, &output_info);
+        attenuverter.fill_output_buffer(&mut output_buffer, &output_info);
         output_buffer
     }
 
     #[test]
     fn test_gain() {
-        let mut attenuator = Attenuator::new();
-        attenuator.set_signal_in(get_constant_signal(1_f32));
-        attenuator.set_gain(0.5);
+        let mut attenuverter = Attenuverter::new();
+        attenuverter.set_signal_in(get_constant_signal(1_f32));
+        attenuverter.set_gain(0.5);
 
-        let output_buffer = get_attenuator_output(&mut attenuator);
+        let output_buffer = get_attenuverter_output(&mut attenuverter);
 
         let expected = vec![0.5; SAMPLE_RATE];
         assert_eq!(output_buffer, expected);
     }
 
     #[test]
-    fn test_control() {
-        let mut attenuator = Attenuator::new();
-        attenuator.set_signal_in(get_constant_signal(1_f32));
-        attenuator.set_control_in(get_constant_signal(0.5));
+    fn test_gain_invert() {
+        let mut attenuverter = Attenuverter::new();
+        attenuverter.set_signal_in(get_constant_signal(1_f32));
+        attenuverter.set_gain(-0.5);
 
-        let output_buffer = get_attenuator_output(&mut attenuator);
+        let output_buffer = get_attenuverter_output(&mut attenuverter);
+
+        let expected = vec![-0.5; SAMPLE_RATE];
+        assert_eq!(output_buffer, expected);
+    }
+
+    #[test]
+    fn test_control() {
+        let mut attenuverter = Attenuverter::new();
+        attenuverter.set_signal_in(get_constant_signal(1_f32));
+        attenuverter.set_control_in(get_constant_signal(0.5));
+
+        let output_buffer = get_attenuverter_output(&mut attenuverter);
 
         let expected = vec![0.5; 10];
         assert_eq!(output_buffer, expected);
@@ -111,12 +123,12 @@ mod tests {
 
     #[test]
     fn test_gain_and_control() {
-        let mut attenuator = Attenuator::new();
-        attenuator.set_signal_in(get_constant_signal(1_f32));
-        attenuator.set_control_in(get_constant_signal(0.25));
-        attenuator.set_gain(0.25);
+        let mut attenuverter = Attenuverter::new();
+        attenuverter.set_signal_in(get_constant_signal(1_f32));
+        attenuverter.set_control_in(get_constant_signal(0.25));
+        attenuverter.set_gain(0.25);
 
-        let output_buffer = get_attenuator_output(&mut attenuator);
+        let output_buffer = get_attenuverter_output(&mut attenuverter);
 
         let expected = vec![0.5; 10];
         assert_eq!(output_buffer, expected);
