@@ -10,8 +10,6 @@ enum Adsr {
 }
 
 pub struct Envelope {
-    sample_rate: f32,
-
     // Times here should be in milliseconds
     attack_time: f32,
     decay_time: f32,
@@ -27,7 +25,7 @@ pub struct Envelope {
 }
 
 impl Envelope {
-    pub fn new(sample_rate: f32) -> Self {
+    pub fn new() -> Self {
         let attack_time = 0.0;
         let decay_time = 0.0;
         let sustain_level = 1.0;
@@ -41,7 +39,7 @@ impl Envelope {
         let triggered = false;
 
         Self { 
-            sample_rate, attack_time, decay_time, sustain_level, release_time,
+            attack_time, decay_time, sustain_level, release_time,
             stage, previous_value, trigger, trigger_tolerance, triggered
         }
     }
@@ -100,8 +98,8 @@ impl Envelope {
         self.triggered = false;
     }
 
-    fn get_attack(&mut self) -> f32 {
-        let time_in_milliseconds = 1000.0 / self.sample_rate;
+    fn get_attack(&mut self, sample_rate: usize) -> f32 {
+        let time_in_milliseconds = 1000.0 / sample_rate as f32;
         let increase_factor = time_in_milliseconds / self.attack_time;
         let envelope_value = self.previous_value + increase_factor;
         if envelope_value >= 1.0 {
@@ -113,8 +111,8 @@ impl Envelope {
         envelope_value
     }
 
-    fn get_decay(&mut self) -> f32 {
-        let time_in_milliseconds = 1000.0 / self.sample_rate;
+    fn get_decay(&mut self, sample_rate: usize) -> f32 {
+        let time_in_milliseconds = 1000.0 / sample_rate as f32;
         let decrease_factor = time_in_milliseconds * (1.0 - self.sustain_level) / self.decay_time;
         let envelope_value = self.previous_value - decrease_factor;
         if envelope_value <= self.sustain_level {
@@ -126,8 +124,8 @@ impl Envelope {
         envelope_value
     }
 
-    fn get_release(&mut self) -> f32 {
-        let time_in_milliseconds = 1000.0 / self.sample_rate;
+    fn get_release(&mut self, sample_rate: usize) -> f32 {
+        let time_in_milliseconds = 1000.0 / sample_rate as f32;
         let decrease_factor = time_in_milliseconds / self.release_time;
         let envelope_value = self.previous_value - decrease_factor;
         if envelope_value <= 0.0 {
@@ -139,12 +137,12 @@ impl Envelope {
         envelope_value
     }
 
-    pub fn get(&mut self) -> f32 {
+    pub fn get(&mut self, sample_rate: usize) -> f32 {
         match self.stage {
-            Adsr::Attack  => self.get_attack(),
-            Adsr::Decay   => self.get_decay(),
+            Adsr::Attack  => self.get_attack(sample_rate),
+            Adsr::Decay   => self.get_decay(sample_rate),
             Adsr::Sustain => self.sustain_level,
-            Adsr::Release => self.get_release(),
+            Adsr::Release => self.get_release(sample_rate),
             Adsr::Done    => 0.0
         }
     }
@@ -168,7 +166,7 @@ impl SignalOutputModule for Envelope {
                     self.release();
                 }
             }
-            *datum = self.get();
+            *datum = self.get(output_info.sample_rate);
         }
     }
 }
@@ -212,7 +210,7 @@ mod tests {
         const SAMPLE_RATE: usize = 4_usize;
         const EXPECTED_DATA: [f32; 12] = [0.25, 0.5, 0.75, 1.0, 0.9375, 0.875, 0.8125, 0.75, 0.75, 0.75, 0.75, 0.75];
 
-        let mut envelope = Envelope::new(SAMPLE_RATE as f32);
+        let mut envelope = Envelope::new();
         envelope.set_attack_time(1000.0);
         envelope.set_decay_time(1000.0);
         envelope.set_sustain_level(0.75);
@@ -240,7 +238,7 @@ mod tests {
         const SAMPLE_RATE: usize = 4_usize;
         const EXPECTED_DATA: [f32; 16] = [0.25, 0.5, 0.75, 1.0, 0.875, 0.75, 0.625, 0.5, 0.25, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
 
-        let mut envelope = Envelope::new(SAMPLE_RATE as f32);
+        let mut envelope = Envelope::new();
         envelope.set_attack_time(1000.0);
         envelope.set_decay_time(1000.0);
         envelope.set_sustain_level(0.5);
