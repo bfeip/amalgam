@@ -4,8 +4,9 @@ use std::env;
 use std::fs;
 use std::path::PathBuf;
 
+use amalgam::module::{MidiModuleBase, MidiNoteOutput, Attenuverter, Envelope, Oscillator, Voice, VoiceSet};
 use amalgam::module::common::*;
-use amalgam::{module, note, output, Synth};
+use amalgam::{note, output, Synth};
 use amalgam::error::*;
 
 struct OscillatorFrequencyOverride {
@@ -34,31 +35,55 @@ impl OptionalSignalOutputModule for OscillatorFrequencyOverride {
 
 #[derive(Clone)]
 struct ExampleVoice {
-    osc: Connectable<module::Oscillator>,
+    osc: Connectable<Oscillator>,
+    env: Connectable<Envelope>,
+    atten: Connectable<Attenuverter>,
     freq_override: Connectable<OscillatorFrequencyOverride>
 }
 
 impl ExampleVoice {
     fn new() -> Self {
-        let mut unmutexed_osc = module::Oscillator::new();
+        // Set up oscillator
+        let mut unconnected_osc = Oscillator::new();
         let freq_override: Connectable<OscillatorFrequencyOverride> = OscillatorFrequencyOverride::new().into();
-        unmutexed_osc.set_frequency_override_input(freq_override.clone().into());
-        let osc = unmutexed_osc.into();
-        Self { osc, freq_override }
+        unconnected_osc.set_frequency_override_input(freq_override.clone().into());
+        let osc: Connectable<Oscillator> = unconnected_osc.into();
+
+        // Set up envelope
+        let mut unconnected_env = Envelope::new();
+        unconnected_env.set_attack_time(100_f32);
+        unconnected_env.set_release_time(100_f32);
+        let env: Connectable<Envelope> = unconnected_env.into();
+
+        // Set up attenuverter
+        let mut unconnected_atten = Attenuverter::new();
+        unconnected_atten.set_control_in(env.clone().into());
+        unconnected_atten.set_signal_in(osc.clone().into());
+        let atten: Connectable<Attenuverter> = unconnected_atten.into();
+
+        Self { osc, env, atten, freq_override }
     }
 }
 
-impl module::Voice for ExampleVoice {
+impl Voice for ExampleVoice {
     fn update(&mut self, reference: &Self) {
         let ref_osc = reference.osc.lock();
         let mut osc = self.osc.lock();
         osc.set_pulse_width(ref_osc.get_pulse_width());
         osc.set_waveform(ref_osc.get_waveform());
+
+        let ref_env = reference.env.lock();
+        let mut env = self.env.lock();
+        env.copy_state_from(&ref_env);
+
+        let ref_atten = reference.atten.lock();
+        let mut atten = self.atten.lock();
+        atten.copy_state_from(&ref_atten);
     }
 
     fn fill_output_for_note_intervals(
         &mut self, sample_buffer: &mut [f32], intervals: &[note::NoteInterval],
-        output_info: &module::common::OutputInfo
+        output_info: &OutputInfo
     ) {
         assert!(!intervals.is_empty(), "Tried to get output with no note intervals");
         let buffer_len = sample_buffer.len();
@@ -104,21 +129,7 @@ impl module::Voice for ExampleVoice {
                 freq_override.set(freq_values.clone());
             }
 
-            self.osc.lock().fill_output_buffer(sample_buffer, output_info);
-            for (sample, &freq) in sample_buffer.iter_mut().zip(freq_values.iter()) {
-                if freq.is_none() {
-                    // Do not play if no note was active
-                    // This is kinda a simple envelope generator in the sense that a real osc would just keep playing.
-                    *sample = 0.0;
-                }
-                else {
-                    /*
-                    To get rid of clipping in sample MIDI
-                    TODO: lazy, do actual attenuation loser. Or compression.
-                    */
-                    *sample /= 4_f32;
-                }
-            }
+            self.atten.lock().fill_output_buffer(sample_buffer, output_info);
         }
     }
 }
@@ -157,7 +168,7 @@ pub fn get_test_midi_file_path() -> PathBuf {
 
 fn main() -> SynthResult<()> {
     let midi_file_path = get_test_midi_file_path();
-    let mut midi_base_module = match module::MidiModuleBase::open(midi_file_path) {
+    let mut midi_base_module = match MidiModuleBase::open(midi_file_path) {
         Ok(midi_base_module) => midi_base_module,
         Err(err) => {
             let msg = format!("Failed to create MIDI base module: {}", err);
@@ -170,13 +181,13 @@ fn main() -> SynthResult<()> {
         return Err(SynthError::new(&msg));
     }
     
-    let midi_note_output = module::MidiNoteOutput::new(
+    let midi_note_output = MidiNoteOutput::new(
         midi_base_module.into()
     );
 
     let note_source: Connectable<dyn NoteOutputModule> = midi_note_output.into();
     let reference_voice = ExampleVoice::new().into();
-    let voice_set = module::voice::VoiceSet::new(reference_voice, 24, note_source);
+    let voice_set = VoiceSet::new(reference_voice, 24, note_source);
 
     let mut example_synth = match Synth::new() {
         Ok(synth) => synth,

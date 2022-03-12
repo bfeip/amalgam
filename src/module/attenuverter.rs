@@ -32,6 +32,12 @@ impl Attenuverter {
     pub fn set_control_gain(&mut self, control_gain: f32) {
         self.control_gain = control_gain;
     }
+
+    pub fn copy_state_from(&mut self, other: &Self) {
+        // Note: Does not update connections
+        self.gain = other.gain;
+        self.control_gain = other.control_gain;
+    }
 }
 
 impl SignalOutputModule for Attenuverter {

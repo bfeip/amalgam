@@ -98,6 +98,15 @@ impl Envelope {
         self.triggered = false;
     }
 
+    pub fn copy_state_from(&mut self, other: &Self) {
+        // Note: Does not update trigger connection
+        self.attack_time = other.attack_time;
+        self.decay_time = other.decay_time;
+        self.sustain_level = other.sustain_level;
+        self.release_time = other.release_time;
+        self.trigger_tolerance = other.trigger_tolerance;
+    }
+
     fn get_attack(&mut self, sample_rate: usize) -> f32 {
         let time_in_milliseconds = 1000.0 / sample_rate as f32;
         let increase_factor = time_in_milliseconds / self.attack_time;

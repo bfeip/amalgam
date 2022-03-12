@@ -23,4 +23,4 @@ pub use envelope::Envelope;
 pub use midi::MidiModuleBase;
 pub use midi::midi_note::MidiNoteOutput;
 pub use output::Output;
-pub use voice::Voice;
+pub use voice::{Voice, VoiceSet};
