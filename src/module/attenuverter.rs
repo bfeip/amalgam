@@ -1,7 +1,7 @@
 use super::common::{Connectable, SignalOutputModule, OutputInfo};
 use super::Empty;
 
-struct Attenuverter {
+pub struct Attenuverter {
     signal_in: Connectable<dyn SignalOutputModule>,
     control_in: Connectable<dyn SignalOutputModule>,
     gain: f32,
@@ -9,7 +9,7 @@ struct Attenuverter {
 }
 
 impl Attenuverter {
-    fn new() -> Self {
+    pub fn new() -> Self {
         let signal_in = Empty::new().into();
         let control_in = Empty::new().into();
         let gain = 0_f32;
@@ -17,19 +17,19 @@ impl Attenuverter {
         Self { signal_in, control_in, gain, control_gain }
     }
 
-    fn set_signal_in(&mut self, signal_in: Connectable<dyn SignalOutputModule>) {
+    pub fn set_signal_in(&mut self, signal_in: Connectable<dyn SignalOutputModule>) {
         self.signal_in = signal_in;
     }
 
-    fn set_control_in(&mut self, control_in: Connectable<dyn SignalOutputModule>) {
+    pub fn set_control_in(&mut self, control_in: Connectable<dyn SignalOutputModule>) {
         self.control_in = control_in;
     }
 
-    fn set_gain(&mut self, gain: f32) {
+    pub fn set_gain(&mut self, gain: f32) {
         self.gain = gain;
     }
 
-    fn set_control_gain(&mut self, control_gain: f32) {
+    pub fn set_control_gain(&mut self, control_gain: f32) {
         self.control_gain = control_gain;
     }
 }
