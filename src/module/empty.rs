@@ -5,7 +5,7 @@ use crate::note::NoteInterval;
 pub struct Empty;
 
 impl Empty {
-    /// Creates and returns a new Empty module e.g. does nothing
+    /// Creates and returns a new Empty module i.e. does nothing
     pub fn new() -> Self {
         Empty {}
     }
