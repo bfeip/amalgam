@@ -45,14 +45,14 @@ impl SignalOutputModule for Attenuverter {
         let buffer_len = buffer.len();
 
         // Get raw, unattenuated signal
-        let mut raw_signal = Vec::with_capacity(buffer_len);
+        let mut raw_signal = vec![0.0; buffer_len];
         {
             let mut locked_signal_in = self.signal_in.lock();
             locked_signal_in.fill_output_buffer(&mut raw_signal, output_info);
         }
 
         // Get control signal
-        let mut control = Vec::with_capacity(buffer_len);
+        let mut control = vec![0.0; buffer_len];
         {
             let mut locked_control_in = self.control_in.lock();
             locked_control_in.fill_output_buffer(&mut control, output_info)
