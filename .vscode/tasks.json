@@ -2,7 +2,7 @@
 	"version": "2.0.0",
 	"tasks": [
 		{
-			"type": "cargo",
+			"command": "cargo",
 			"subcommand": "build",
 			"problemMatcher": [
 				"$rustc"
@@ -11,7 +11,7 @@
 				"kind": "build",
 				"isDefault": true
 			},
-			"label": "Rust: cargo build - synth"
+			"label": "Rust: cargo build - amalgam"
 		},
 		{
 			"type": "cargo",
@@ -23,18 +23,32 @@
 				"kind": "test",
 				"isDefault": true
 			},
-			"label": "Rust: cargo test - synth"
+			"label": "Rust: cargo test - amalgam"
 		},
 		{
 			"type": "shell",
 			"command": "cargo",
 			"args": [
-				"test", "--no-run"
+				"test",
+				"--no-run"
 			],
 			"problemMatcher": [
 				"$rustc"
 			],
 			"label": "cargo build tests"
-		}
+		},
+		{
+			"type": "shell",
+			"command": "cargo",
+			"args": [
+				"build",
+				"--example",
+				"play_from_midi"
+			],
+			"problemMatcher": [
+				"$rustc"
+			],
+			"label": "cargo build play_from_midi"
+		},
 	]
 }
