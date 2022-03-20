@@ -33,12 +33,57 @@ impl OptionalSignalOutputModule for OscillatorFrequencyOverride {
     }
 }
 
+struct EnvelopeTrigger {
+    starts: Vec<usize>,
+    ends: Vec<usize>,
+    trigger_signal: f32
+}
+
+impl EnvelopeTrigger {
+    fn new() -> Self {
+        let starts = Vec::new();
+        let ends = Vec::new();
+        let trigger_signal = 0.0;
+        Self { starts, ends, trigger_signal }
+    }
+
+    fn clear(&mut self) {
+        self.starts.clear();
+        self.ends.clear();
+    }
+
+    fn add_start(&mut self, start: usize) {
+        self.starts.push(start);
+    }
+
+    fn add_end(&mut self, end: usize) {
+        self.ends.push(end);
+    }
+}
+
+impl SignalOutputModule for EnvelopeTrigger {
+    fn fill_output_buffer(&mut self, buffer: &mut[f32], _output_info: &OutputInfo) {
+        let buffer_len = buffer.len();
+        for i in 0..buffer_len {
+            if self.starts.contains(&i) {
+                self.trigger_signal = 1.0;
+            }
+            if self.ends.contains(&i) {
+                self.trigger_signal = 0.0;
+            }
+
+            buffer[i] = self.trigger_signal;
+        }
+    }
+}
+
 #[derive(Clone)]
 struct ExampleVoice {
     osc: Connectable<Oscillator>,
     env: Connectable<Envelope>,
     atten: Connectable<Attenuverter>,
-    freq_override: Connectable<OscillatorFrequencyOverride>
+    freq_override: Connectable<OscillatorFrequencyOverride>,
+    env_trigger: Connectable<EnvelopeTrigger>
 }
 
 impl ExampleVoice {
@@ -51,8 +96,10 @@ impl ExampleVoice {
 
         // Set up envelope
         let mut unconnected_env = Envelope::new();
-        unconnected_env.set_attack_time(100_f32);
-        unconnected_env.set_release_time(100_f32);
+        let env_trigger: Connectable<EnvelopeTrigger> = EnvelopeTrigger::new().into();
+        unconnected_env.set_attack_time(500_f32);
+        unconnected_env.set_release_time(500_f32);
+        unconnected_env.set_trigger(env_trigger.clone().into());
         let env: Connectable<Envelope> = unconnected_env.into();
 
         // Set up attenuverter
@@ -61,7 +108,7 @@ impl ExampleVoice {
         unconnected_atten.set_signal_in(osc.clone().into());
         let atten: Connectable<Attenuverter> = unconnected_atten.into();
 
-        Self { osc, env, atten, freq_override }
+        Self { osc, env, atten, freq_override, env_trigger }
     }
 }
 
@@ -88,6 +135,9 @@ impl Voice for ExampleVoice {
         debug_assert!(!intervals.is_empty(), "Tried to get output with no note intervals");
         let buffer_len = sample_buffer.len();
 
+        // Don't forget to clear out the starts and ends for the envelope
+        self.env_trigger.lock().clear();
+
         // Get freq value for each sample
         let mut freq_values = Vec::with_capacity(buffer_len);
         let mut sample_counter = 0_usize;
@@ -101,11 +151,18 @@ impl Voice for ExampleVoice {
             // If start sample is None that means the note started in a previous sample period and we enter this
             // sample period with the note already playing
             if note_interval.start.is_some() {
-                while sample_counter != note_interval.start.unwrap() {
+                let start = note_interval.start.unwrap();
+                self.env_trigger.lock().add_start(start);
+                while sample_counter != start {
                     // Until the next note is played just push nothing
                     freq_values.push(None);
                     sample_counter += 1;
                 }
+            }
+
+            if note_interval.end.is_some() {
+                let end = note_interval.end.unwrap();
+                self.env_trigger.lock().add_end(end);
             }
 
             let end_sample = note_interval.end.unwrap_or(buffer_len);
@@ -119,6 +176,7 @@ impl Voice for ExampleVoice {
                     sample_counter += 1;
                 }
             }
+            
             while sample_counter < buffer_len {
                 freq_values.push(None);
                 sample_counter += 1;
@@ -175,7 +233,7 @@ fn main() -> SynthResult<()> {
             return Err(SynthError::new(&msg));
         }
     };
-    
+
     // Set track to 1, which is where the actual notes are in this MIDI file
     if let Err(err) = midi_base_module.set_track(1) {
         let msg = format!("Failed to set correct MIDI track to read from: {}", err);
@@ -200,7 +258,7 @@ fn main() -> SynthResult<()> {
     let output_module = example_synth.get_output_module_mut();
     output_module.set_audio_input(voice_set.into());
 
-    // TODO: it's annoying to have to crete this as a user. It should be created by the synth
+    // TODO: it's annoying to have to create this as a user. It should be created by the synth
     let mut audio_output = match output::AudioOutput::new(output::OutputDeviceType::Cpal) {
         Ok(audio_output) => audio_output,
         Err(err) => {
