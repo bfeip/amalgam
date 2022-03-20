@@ -68,6 +68,9 @@ impl CpalAudioOutput {
             }
         };
 
+        let min_sample_rate = supported_config.min_sample_rate();
+        let max_sample_rate = supported_config.max_sample_rate();
+
         // Print configuration details to console if requested
         #[cfg(feature = "audio_printing")]
         {
@@ -77,10 +80,7 @@ impl CpalAudioOutput {
                 return Err(AudioOutputError::new(&msg));
             }
             let device_name = device_name.unwrap(); // shadow
-
             let sample_format = supported_config.sample_format();
-            let min_sample_rate = supported_config.min_sample_rate();
-            let max_sample_rate = supported_config.max_sample_rate();
             
             println!(
                 "Device name: {}\nSample format: {:#?}\nMin sample rate: {:#?}\nMax sample rate: {:#?}",
@@ -88,7 +88,20 @@ impl CpalAudioOutput {
             );
         }
 
-        let current_config = supported_config.with_sample_rate(cpal::SampleRate(48_000));
+        // Find a good sample rate. There are a few good rates we'll check for. If we can't get those
+        // we'll just go for the max.
+        let desired_sample_rates = [
+            cpal::SampleRate(48_000),
+            cpal::SampleRate(44_100),
+        ];
+        let mut sample_rate = max_sample_rate;
+        for desired_sample_rate in desired_sample_rates.iter().cloned() {
+            if desired_sample_rate > min_sample_rate && desired_sample_rate < max_sample_rate {
+                sample_rate = desired_sample_rate;
+                break;
+            }
+        };
+        let current_config = supported_config.with_sample_rate(sample_rate);
 
         // Start setting up the output stream
         let sample_format = current_config.sample_format();
