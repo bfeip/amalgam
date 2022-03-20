@@ -85,7 +85,7 @@ impl Voice for ExampleVoice {
         &mut self, sample_buffer: &mut [f32], intervals: &[note::NoteInterval],
         output_info: &OutputInfo
     ) {
-        assert!(!intervals.is_empty(), "Tried to get output with no note intervals");
+        debug_assert!(!intervals.is_empty(), "Tried to get output with no note intervals");
         let buffer_len = sample_buffer.len();
 
         // Get freq value for each sample
@@ -95,8 +95,8 @@ impl Voice for ExampleVoice {
             // Some checks that note intervals appear in the expected order and do not overlap one another
             let is_correct_start_note = note_interval.start.is_none() && sample_counter == 0;
             let is_ordered = note_interval.start.unwrap_or(sample_counter) >= sample_counter;
-            assert!(is_correct_start_note || is_ordered, "Overlapping intervals");
-            assert!(sample_counter < buffer_len, "Too many samples");
+            debug_assert!(is_correct_start_note || is_ordered, "Overlapping intervals");
+            debug_assert!(sample_counter < buffer_len, "Too many samples");
 
             // If start sample is None that means the note started in a previous sample period and we enter this
             // sample period with the note already playing
@@ -175,6 +175,7 @@ fn main() -> SynthResult<()> {
             return Err(SynthError::new(&msg));
         }
     };
+    
     // Set track to 1, which is where the actual notes are in this MIDI file
     if let Err(err) = midi_base_module.set_track(1) {
         let msg = format!("Failed to set correct MIDI track to read from: {}", err);
