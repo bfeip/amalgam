@@ -130,7 +130,7 @@ impl Track {
                 parser::event::EventBody::Meta(parser_meta_event) => {
                     use parser::event::meta::MetaEvent;
                     match parser_meta_event {
-                        // TODO: is it possible to specifiy these more than once per
+                        // TODO: is it possible to specify these more than once per
                         // track. E.g. change tempo in the middle of a track?
                         MetaEvent::SequenceNumber { number } => {
                             ret.sequence_number = Some(*number);
