@@ -79,6 +79,7 @@ impl SignalOutputModule for EnvelopeTrigger {
 
 #[derive(Clone)]
 struct ExampleVoice {
+    voice_number: Option<usize>,
     osc: Connectable<Oscillator>,
     env: Connectable<Envelope>,
     atten: Connectable<Attenuverter>,
@@ -88,6 +89,8 @@ struct ExampleVoice {
 
 impl ExampleVoice {
     fn new() -> Self {
+        let voice_number = None;
+
         // Set up oscillator
         let mut unconnected_osc = Oscillator::new();
         let freq_override: Connectable<OscillatorFrequencyOverride> = OscillatorFrequencyOverride::new().into();
@@ -108,7 +111,7 @@ impl ExampleVoice {
         unconnected_atten.set_signal_in(osc.clone().into());
         let atten: Connectable<Attenuverter> = unconnected_atten.into();
 
-        Self { osc, env, atten, freq_override, env_trigger }
+        Self { voice_number, osc, env, atten, freq_override, env_trigger }
     }
 }
 
@@ -130,10 +133,15 @@ impl Voice for ExampleVoice {
 
     fn fill_output_for_note_intervals(
         &mut self, sample_buffer: &mut [f32], intervals: &[note::NoteInterval],
-        output_info: &OutputInfo
+        output_info: &OutputInfo, voice_number: usize
     ) {
         debug_assert!(!intervals.is_empty(), "Tried to get output with no note intervals");
         let buffer_len = sample_buffer.len();
+
+        debug_assert!(
+            *self.voice_number.get_or_insert(voice_number) == voice_number,
+            "Expected voice number to remain consistent"
+        );
 
         // Don't forget to clear out the starts and ends for the envelope
         self.env_trigger.lock().clear();

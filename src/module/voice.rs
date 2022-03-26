@@ -9,7 +9,11 @@ pub trait Voice: Send + Clone {
     fn update(&mut self, reference_voice: &Self);
 
     fn fill_output_for_note_intervals(
-        &mut self, sample_buffer: &mut [f32], intervals: &[NoteInterval], output_info: &OutputInfo
+        &mut self,
+        sample_buffer: &mut [f32],
+        intervals: &[NoteInterval],
+        output_info: &OutputInfo,
+        voice_number: usize
     );
 }
 
@@ -128,8 +132,8 @@ where
 
         // Send intervals to voices and get output
         buffer.fill(0_f32);
-        for (i, voice_entry) in self.voice_entries.iter_mut().enumerate() {
-            let intervals = &note_intervals_by_voice[i];
+        for (voice_number, voice_entry) in self.voice_entries.iter_mut().enumerate() {
+            let intervals = &note_intervals_by_voice[voice_number];
             if intervals.len() == 0 {
                 // If there's no notes just skip
                 continue;
@@ -137,7 +141,7 @@ where
 
             let mut voice_output = vec![0_f32; buffer_len];
 
-            voice_entry.voice.fill_output_for_note_intervals(&mut voice_output, intervals, output_info);
+            voice_entry.voice.fill_output_for_note_intervals(&mut voice_output, intervals, output_info, voice_number);
             for i in 0..voice_output.len() {
                 buffer[i] += voice_output[i];
             }
@@ -167,6 +171,7 @@ mod tests {
     use crate::note::Tone;
     use crate::clock::SampleClock;
 
+    use core::panic;
     use std::iter::FromIterator;
 
     struct OscillatorFrequencyOverride {
@@ -195,17 +200,19 @@ mod tests {
 
     #[derive(Clone)]
     struct TestVoice {
+        voice_number: Option<usize>,
         osc: Connectable<Oscillator>,
         freq_override: Connectable<OscillatorFrequencyOverride>
     }
 
     impl TestVoice {
         fn new() -> Self {
-            let mut unmutexed_osc = Oscillator::new();
+            let voice_number = None;
+            let mut unconnected_osc = Oscillator::new();
             let freq_override: Connectable<OscillatorFrequencyOverride> = OscillatorFrequencyOverride::new().into();
-            unmutexed_osc.set_frequency_override_input(freq_override.clone().into());
-            let osc = unmutexed_osc.into();
-            Self { osc, freq_override }
+            unconnected_osc.set_frequency_override_input(freq_override.clone().into());
+            let osc = unconnected_osc.into();
+            Self { voice_number, osc, freq_override }
         }
     }
 
@@ -220,10 +227,15 @@ mod tests {
 
         fn fill_output_for_note_intervals(
             &mut self, sample_buffer: &mut [f32], note_intervals: &[NoteInterval],
-            output_info: &OutputInfo
+            output_info: &OutputInfo, voice_number: usize
         ) {
             assert!(!note_intervals.is_empty(), "Tried to get output with no note intervals");
             let buffer_len = sample_buffer.len();
+
+            // Check that voice number is consistent
+            if *self.voice_number.get_or_insert(voice_number) != voice_number {
+                panic!("Expected voice number the remain consistent");
+            }
 
             // Get freq value for each sample
             let mut freq_values = Vec::with_capacity(buffer_len);
