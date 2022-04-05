@@ -174,15 +174,11 @@ impl Voice for ExampleVoice {
             }
 
             let end_sample = note_interval.end.unwrap_or(buffer_len);
+            let note_freq = note_interval.note.to_freq();
             while sample_counter != end_sample {
-                // Until the note is done playing, push the notes freq value
-                let note_freq = note_interval.note.to_freq();
-                let end_sample = note_interval.end.unwrap_or(buffer_len);
-                while sample_counter != end_sample {
-                    // Until the note is done playing, push the notes freq value
-                    freq_values.push(Some(note_freq));
-                    sample_counter += 1;
-                }
+                // Until the note is done playing, push the note's freq value
+                freq_values.push(Some(note_freq));
+                sample_counter += 1;
             }
             
             while sample_counter < buffer_len {
