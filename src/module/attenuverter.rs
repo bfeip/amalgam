@@ -1,6 +1,7 @@
 use super::common::{Connectable, SignalOutputModule, OutputInfo};
 use super::Empty;
 
+#[derive(Clone)]
 pub struct Attenuverter {
     signal_in: Connectable<dyn SignalOutputModule>,
     control_in: Connectable<dyn SignalOutputModule>,
