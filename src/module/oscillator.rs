@@ -1,4 +1,5 @@
 use crate::note;
+use crate::clock;
 use super::common::*;
 use super::empty::OptionalEmpty;
 
@@ -68,58 +69,65 @@ impl Oscillator {
         self.freq_override_input = override_input;
     }
 
-    fn fill_sine(&self, buffer: &mut [f32], clock_values: &[usize], freq_values: &[f32], sample_rate: usize) {
+    fn fill_sine(&self, buffer: &mut [f32], sample_range: &clock::SampleRange, freq_values: &[f32]) {
         let buffer_len = buffer.len();
-        debug_assert!(buffer_len == clock_values.len() && buffer_len == freq_values.len());
+        let sample_rate = sample_range.get_sample_rate();
+        debug_assert!(buffer_len == sample_range.get_n_samples() && buffer_len == freq_values.len());
+        let mut sample_iter = sample_range.iter();
         for i in 0..buffer_len {
-            let clock_value = clock_values[i] as f32;
+            let sample_number = sample_iter.next().expect("Ran out of samples??") as f32;
             let freq_value = freq_values[i];
             let sample_rate = sample_rate as f32;
 
-            buffer[i] = (freq_value * clock_value * TAU / sample_rate).sin();
+            buffer[i] = (freq_value * sample_number * TAU / sample_rate).sin();
         }
     }
 
-    fn fill_ramp(&self, buffer: &mut [f32], clock_values: &[usize], freq_values: &[f32], sample_rate: usize) {
+    fn fill_ramp(&self, buffer: &mut [f32], sample_range: &clock::SampleRange, freq_values: &[f32]) {
         let buffer_len = buffer.len();
-        debug_assert!(buffer_len == clock_values.len() && buffer_len == freq_values.len());
+        let sample_rate = sample_range.get_sample_rate();
+        debug_assert!(buffer_len == sample_range.get_n_samples() && buffer_len == freq_values.len());
+        let mut sample_iter = sample_range.iter();
         for i in 0..buffer_len {
-            let clock_value = clock_values[i] as f32;
+            let sample_number = sample_iter.next().expect("Ran out of samples??") as f32;
             let freq_value = freq_values[i];
             let sample_rate = sample_rate as f32;
 
-            buffer[i] = (freq_value * clock_value * 2_f32 / sample_rate) % 2_f32 - 1_f32;
+            buffer[i] = (freq_value * sample_number * 2_f32 / sample_rate) % 2_f32 - 1_f32;
         }
     }
 
-    fn fill_saw(&self, buffer: &mut [f32], clock_values: &[usize], freq_values: &[f32], sample_rate: usize) {
+    fn fill_saw(&self, buffer: &mut [f32], sample_range: &clock::SampleRange, freq_values: &[f32]) {
         let buffer_len = buffer.len();
-        debug_assert!(buffer_len == clock_values.len() && buffer_len == freq_values.len());
+        let sample_rate = sample_range.get_sample_rate();
+        debug_assert!(buffer_len == sample_range.get_n_samples() && buffer_len == freq_values.len());
+        let mut sample_iter = sample_range.iter();
         for i in 0..buffer_len {
-            let clock_value = clock_values[i] as f32;
+            let sample_number = sample_iter.next().expect("Ran out of samples??") as f32;
             let freq_value = freq_values[i];
             let sample_rate = sample_rate as f32;
 
-            buffer[i] = (freq_value * clock_value * -2_f32 / sample_rate) % 2_f32 + 1_f32;
+            buffer[i] = (freq_value * sample_number * -2_f32 / sample_rate) % 2_f32 + 1_f32;
         }
     }
 
-    fn fill_pulse(&self, buffer: &mut [f32], clock_values: &[usize], freq_values: &[f32], sample_rate: usize) {
+    fn fill_pulse(&self, buffer: &mut [f32], sample_range: &clock::SampleRange, freq_values: &[f32]) {
         let buffer_len = buffer.len();
-        debug_assert!(buffer_len == clock_values.len() && buffer_len == freq_values.len());
+        let sample_rate = sample_range.get_sample_rate();
+        debug_assert!(buffer_len == sample_range.get_n_samples() && buffer_len == freq_values.len());
+        let mut sample_iter = sample_range.iter();
         for i in 0..buffer_len {
-            let clock_value = clock_values[i] as f32;
+            let sample_number = sample_iter.next().expect("Ran out of samples??") as f32;
             let freq_value = freq_values[i];
             let sample_rate = sample_rate as f32;
 
-            let duration_offset = (clock_value * freq_value / sample_rate) % 1_f32;
+            let duration_offset = (sample_number * freq_value / sample_rate) % 1_f32;
             buffer[i] = if duration_offset > self.pulse_width { 1_f32 } else { -1_f32 };
         }
     }
 
     fn fill(
-        &self, buffer: &mut [f32], clock_values: &[usize],
-        freq_override_buffer: &[Option<f32>], sample_rate: usize
+        &self, buffer: &mut [f32], sample_range: &clock::SampleRange, freq_override_buffer: &[Option<f32>]
     ) {
         let buffer_len = buffer.len();
 
@@ -132,10 +140,10 @@ impl Oscillator {
         }
 
         match self.waveform {
-            Waveform::Sine     => self.fill_sine(buffer, clock_values, &freq_values, sample_rate),
-            Waveform::Ramp     => self.fill_ramp(buffer, clock_values, &freq_values, sample_rate),
-            Waveform::Saw      => self.fill_saw(buffer, clock_values, &freq_values, sample_rate),
-            Waveform::Pulse    => self.fill_pulse(buffer, clock_values, &freq_values, sample_rate),
+            Waveform::Sine     => self.fill_sine(buffer, sample_range, &freq_values),
+            Waveform::Ramp     => self.fill_ramp(buffer, sample_range, &freq_values),
+            Waveform::Saw      => self.fill_saw(buffer, sample_range, &freq_values),
+            Waveform::Pulse    => self.fill_pulse(buffer, sample_range, &freq_values),
             Waveform::Triangle => todo!()
         }
     }
@@ -150,7 +158,7 @@ impl SignalOutputModule for Oscillator {
         let mut freq_override_module = self.freq_override_input.lock();
         freq_override_module.fill_optional_output_buffer(freq_override_buffer.as_mut_slice(), output_info);
 
-        self.fill(data, &output_info.current_sample_range, &freq_override_buffer, output_info.sample_rate);
+        self.fill(data, &output_info.current_sample_range, &freq_override_buffer);
     }
 }
 

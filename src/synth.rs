@@ -108,9 +108,9 @@ impl Synth {
 
             let clock_values_len = buffer_length / channel_count as usize;
             let mut sample_clock = locked_synth.master_sample_clock;
-            let clock_values = sample_clock.get_range(clock_values_len);
+            let sample_range = sample_clock.get_range(clock_values_len);
             locked_synth.master_sample_clock = sample_clock;
-            let output_info = OutputInfo::new(locked_synth.sample_rate, channel_count, clock_values, timestamp);
+            let output_info = OutputInfo::new(locked_synth.sample_rate, channel_count, sample_range, timestamp);
 
             #[cfg(feature = "audio_printing")]
             let computation_started = time::Instant::now();

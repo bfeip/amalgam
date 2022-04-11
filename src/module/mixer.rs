@@ -124,7 +124,7 @@ mod tests {
         (mixer_input_1, mixer_input_2)
     }
 
-    fn get_clock_values(sample_rate: usize, buffer_size: usize) -> Vec<usize> {
+    fn get_clock_values(sample_rate: usize, buffer_size: usize) -> clock::SampleRange {
         let mut clock = clock::SampleClock::new(sample_rate);
         clock.get_range(buffer_size)
     }
