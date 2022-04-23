@@ -1,5 +1,6 @@
 use super::common::*;
 use crate::note::{Note, NoteInterval};
+use crate::SignalLogger;
 
 use std::collections::HashSet;
 
@@ -33,7 +34,8 @@ where
     next_voice_index: usize, // Used to round robin though voices while playing notes
 
     note_source: Connectable<N>,
-    currently_active_notes: HashSet<Note>
+    currently_active_notes: HashSet<Note>,
+    signal_logger: SignalLogger,
 }
 
 impl<V, N> VoiceSet<V, N>
@@ -59,13 +61,19 @@ where
         let next_voice_index = 0;
         let currently_active_notes = HashSet::new();
 
+        #[cfg(feature = "signal_logging")]
+        let signal_logger = SignalLogger::new("voices_signal.txt");
+        #[cfg(not(feature = "signal_logging"))]
+        let signal_logger = SignalLogger::new_sink();
+
         Self {
             reference_voice,
             max_voices,
             voice_entries,
             next_voice_index,
             note_source,
-            currently_active_notes
+            currently_active_notes,
+            signal_logger
         }
     }
 }
@@ -135,6 +143,11 @@ where
         for (voice_number, voice_entry) in self.voice_entries.iter_mut().enumerate() {
             let intervals = &note_intervals_by_voice[voice_number];
             if intervals.len() == 0 {
+                let source_str = format!("Voice {}", voice_number);
+                if let Err(err) = self.signal_logger.log(source_str, &vec![0_f32; buffer_len]) {
+                    panic!("Failed to write voice logs: {}", err);
+                }
+                
                 // If there's no notes just skip
                 continue;
             }
@@ -144,6 +157,11 @@ where
             voice_entry.voice.fill_output_for_note_intervals(&mut voice_output, intervals, output_info, voice_number);
             for i in 0..voice_output.len() {
                 buffer[i] += voice_output[i];
+            }
+
+            let source_str = format!("Voice {}", voice_number);
+            if let Err(err) = self.signal_logger.log(source_str, &voice_output) {
+                panic!("Failed to write voice logs: {}", err);
             }
 
             // Check if this is playing a note till the end of the sample. If it is make sure to record

@@ -284,7 +284,8 @@ fn main() -> SynthResult<()> {
 
     let note_source: Connectable<dyn NoteOutputModule> = midi_note_output.into();
     let reference_voice = ExampleVoice::new().into();
-    let voice_set = VoiceSet::new(reference_voice, 24, note_source);
+
+    let voice_set = VoiceSet::new(reference_voice, 5, note_source);
 
     let mut example_synth = match Synth::new() {
         Ok(synth) => synth,
