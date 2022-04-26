@@ -113,10 +113,21 @@ impl Envelope {
         let time_in_milliseconds = 1000.0 / sample_rate as f32;
         let increase_factor = time_in_milliseconds / self.attack_time;
         let envelope_value = self.previous_value + increase_factor;
+        debug_assert!(envelope_value.is_finite());
         if envelope_value >= 1.0 {
-            self.stage = Adsr::Decay;
-            self.previous_value = 1.0;
-            return 1.0;
+            if self.decay_time > 0.0 && self.sustain_level != 1.0 {
+                // There is a decay stage
+                self.stage = Adsr::Decay;
+                self.previous_value = 1.0;
+                return 1.0;
+            }
+            else {
+                // There is no decay stage
+                self.stage = Adsr::Sustain;
+                self.previous_value = self.sustain_level;
+                return 1.0
+            }
+            
         }
         self.previous_value = envelope_value;
         envelope_value
@@ -126,6 +137,7 @@ impl Envelope {
         let time_in_milliseconds = 1000.0 / sample_rate as f32;
         let decrease_factor = time_in_milliseconds * (1.0 - self.sustain_level) / self.decay_time;
         let envelope_value = self.previous_value - decrease_factor;
+        debug_assert!(envelope_value.is_finite());
         if envelope_value <= self.sustain_level {
             self.stage = Adsr::Sustain;
             self.previous_value = self.sustain_level;
@@ -139,6 +151,7 @@ impl Envelope {
         let time_in_milliseconds = 1000.0 / sample_rate as f32;
         let decrease_factor = time_in_milliseconds / self.release_time;
         let envelope_value = self.previous_value - decrease_factor;
+        debug_assert!(envelope_value.is_finite());
         if envelope_value <= 0.0 {
             self.stage = Adsr::Done;
             self.previous_value = 0.0;
