@@ -9,6 +9,7 @@ use amalgam::module::common::*;
 use amalgam::{note, output, Synth};
 use amalgam::error::*;
 
+#[derive(Clone)]
 struct OscillatorFrequencyOverride {
     freqs: Vec<Option<f32>>
 }
@@ -33,6 +34,7 @@ impl OptionalSignalOutputModule for OscillatorFrequencyOverride {
     }
 }
 
+#[derive(Clone)]
 struct EnvelopeTrigger {
     starts: Vec<usize>,
     ends: Vec<usize>,
@@ -77,7 +79,6 @@ impl SignalOutputModule for EnvelopeTrigger {
     }
 }
 
-#[derive(Clone)]
 struct ExampleVoice {
     voice_number: Option<usize>,
     osc: Connectable<Oscillator>,
@@ -174,15 +175,11 @@ impl Voice for ExampleVoice {
             }
 
             let end_sample = note_interval.end.unwrap_or(buffer_len);
+            let note_freq = note_interval.note.to_freq();
             while sample_counter != end_sample {
-                // Until the note is done playing, push the notes freq value
-                let note_freq = note_interval.note.to_freq();
-                let end_sample = note_interval.end.unwrap_or(buffer_len);
-                while sample_counter != end_sample {
-                    // Until the note is done playing, push the notes freq value
-                    freq_values.push(Some(note_freq));
-                    sample_counter += 1;
-                }
+                // Until the note is done playing, push the note's freq value
+                freq_values.push(Some(note_freq));
+                sample_counter += 1;
             }
             
             while sample_counter < buffer_len {
@@ -196,6 +193,39 @@ impl Voice for ExampleVoice {
             }
 
             self.atten.lock().fill_output_buffer(sample_buffer, output_info);
+        }
+    }
+}
+
+// This deep clone method is needed so that when the voices are created they are not referencing the same components.
+// In the future we may want to have this be a method that Voice implementors have to implement e.g. `deep_clone()`.
+impl Clone for ExampleVoice {
+    fn clone(&self) -> Self {
+        let voice_number = self.voice_number;
+
+        let mut unconnected_osc = self.osc.lock().clone();
+        let mut unconnected_env = self.env.lock().clone();
+        let mut unconnected_atten = self.atten.lock().clone();
+        let freq_override: Connectable<OscillatorFrequencyOverride> = self.freq_override.lock().clone().into();
+        let env_trigger: Connectable<EnvelopeTrigger> = self.env_trigger.lock().clone().into();
+
+        unconnected_osc.set_frequency_override_input(freq_override.clone().into());
+
+        unconnected_env.set_trigger(env_trigger.clone().into());
+
+        let osc: Connectable<Oscillator> = unconnected_osc.into();
+        let env: Connectable<Envelope> = unconnected_env.into();
+        unconnected_atten.set_signal_in(osc.clone().into());
+        unconnected_atten.set_control_in(env.clone().into());
+        let atten = unconnected_atten.into();
+
+        Self {
+            voice_number,
+            osc,
+            env,
+            atten,
+            freq_override,
+            env_trigger
         }
     }
 }
@@ -254,7 +284,8 @@ fn main() -> SynthResult<()> {
 
     let note_source: Connectable<dyn NoteOutputModule> = midi_note_output.into();
     let reference_voice = ExampleVoice::new().into();
-    let voice_set = VoiceSet::new(reference_voice, 24, note_source);
+
+    let voice_set = VoiceSet::new(reference_voice, 5, note_source);
 
     let mut example_synth = match Synth::new() {
         Ok(synth) => synth,

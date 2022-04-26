@@ -288,7 +288,7 @@ impl Channel {
         let mut note_events = Vec::new();
         for i in start_note_index..self.note_events.len() {
             let note_event = self.note_events[i].clone();
-            if note_event.time_offset > new_position {
+            if note_event.time_offset >= new_position {
                 break;
             }
             note_events.push(note_event);

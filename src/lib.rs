@@ -17,3 +17,6 @@ pub mod synth;
 
 pub use crate::synth::Synth;
 pub use error::{SynthError, SynthResult};
+
+pub mod signal_logger;
+pub use signal_logger::SignalLogger;

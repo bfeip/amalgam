@@ -1,6 +1,7 @@
 use std::{sync::{Arc, Mutex, MutexGuard}, ops::Deref};
 
 use crate::note::NoteInterval;
+use crate::clock::SampleRange;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum EdgeDetection {
@@ -76,20 +77,20 @@ impl OutputTimestamp {
 pub struct OutputInfo {
     pub sample_rate: usize,
     pub channel_count: u16,
-    pub current_sample_range: Vec<usize>,
+    pub current_sample_range: SampleRange,
     pub timestamp: OutputTimestamp
 }
 
 impl OutputInfo {
     pub fn new(
         sample_rate: usize, channel_count: u16,
-        current_sample_range: Vec<usize>, timestamp: OutputTimestamp
+        current_sample_range: SampleRange, timestamp: OutputTimestamp
     ) -> Self {
         OutputInfo { sample_rate, channel_count, current_sample_range, timestamp }
     }
 
     #[cfg(test)]
-    pub fn new_basic(sample_rate: usize, current_sample_range: Vec<usize>) -> Self {
+    pub fn new_basic(sample_rate: usize, current_sample_range: SampleRange) -> Self {
         let channel_count = 1;
         let timestamp = OutputTimestamp::empty();
         OutputInfo { sample_rate, channel_count, current_sample_range, timestamp }

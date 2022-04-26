@@ -139,7 +139,12 @@ impl MidiModuleBase {
         let start_microseconds = self.microseconds_read;
         let end_microseconds = start_microseconds + n_microseconds;
 
-        let note_delta_result = self.data.get_notes_delta(self.track, self.channel, start_microseconds, end_microseconds);
+        let note_delta_result = self.data.get_notes_delta(
+            self.track,
+            self.channel,
+            start_microseconds,
+            end_microseconds
+        );
         match note_delta_result {
             Ok(notes_delta) => {
                 self.cached_note_delta = Some(notes_delta.clone());

@@ -3,6 +3,7 @@ use super::module::output::Output;
 use super::module::common::{SignalOutputModule, OutputInfo, OutputTimestamp};
 use super::output::{AudioOutput};
 use super::clock;
+use super::SignalLogger;
 
 #[cfg(feature = "audio_printing")]
 use std::time;
@@ -13,7 +14,7 @@ pub struct Synth {
     output_module: Output,
     sample_rate: usize,
     master_sample_clock: clock::SampleClock,
-    pub debug_sample_buffer: Vec<f32>
+    signal_logger: SignalLogger
 }
 
 impl Synth {
@@ -21,9 +22,13 @@ impl Synth {
         let output_module = Output::new();
         let master_sample_clock = clock::SampleClock::new(0);
         let sample_rate = 0;
-        let debug_sample_buffer = Vec::with_capacity(10_000);
 
-        let synth = Synth { output_module, sample_rate, master_sample_clock, debug_sample_buffer };
+        #[cfg(feature = "signal_logging")]
+        let signal_logger = SignalLogger::new("final_signal.txt");
+        #[cfg(not(feature = "signal_logging"))]
+        let signal_logger = SignalLogger::new_sink();
+
+        let synth = Synth { output_module, sample_rate, master_sample_clock, signal_logger };
         Ok(synth)
     }
 
@@ -108,9 +113,9 @@ impl Synth {
 
             let clock_values_len = buffer_length / channel_count as usize;
             let mut sample_clock = locked_synth.master_sample_clock;
-            let clock_values = sample_clock.get_range(clock_values_len);
+            let sample_range = sample_clock.get_range(clock_values_len);
             locked_synth.master_sample_clock = sample_clock;
-            let output_info = OutputInfo::new(locked_synth.sample_rate, channel_count, clock_values, timestamp);
+            let output_info = OutputInfo::new(locked_synth.sample_rate, channel_count, sample_range, timestamp);
 
             #[cfg(feature = "audio_printing")]
             let computation_started = time::Instant::now();
@@ -121,7 +126,9 @@ impl Synth {
             #[cfg(feature = "audio_printing")]
             let computation_ended = time::Instant::now();
 
-            locked_synth.debug_sample_buffer.extend_from_slice(&f32_buffer);
+            if let Err(err) = locked_synth.signal_logger.log("final".to_owned(), &f32_buffer) {
+                panic!("Failed to write signal log: {}", err);
+            }
 
             #[cfg(feature = "audio_printing")]
             {

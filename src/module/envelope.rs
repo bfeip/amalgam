@@ -1,6 +1,7 @@
 use super::common::{SignalOutputModule, OutputInfo, Connectable};
 use super::empty::Empty;
 
+#[derive(Debug, Clone, Copy, Hash)]
 enum Adsr {
     Attack,
     Decay,
@@ -9,6 +10,7 @@ enum Adsr {
     Done
 }
 
+#[derive(Clone)]
 pub struct Envelope {
     // Times here should be in milliseconds
     attack_time: f32,
