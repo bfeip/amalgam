@@ -4,6 +4,7 @@ use std::env;
 use std::fs;
 use std::path::PathBuf;
 
+use amalgam::module::Compressor;
 use amalgam::module::{MidiModuleBase, MidiNoteOutput, Attenuverter, Envelope, Oscillator, Voice, VoiceSet};
 use amalgam::module::common::*;
 use amalgam::{note, output, Synth};
@@ -297,6 +298,9 @@ fn main() -> SynthResult<()> {
 
     let voice_set = VoiceSet::new(reference_voice, 5, note_source);
 
+    let mut compressor = Compressor::new();
+    compressor.set_signal_in(voice_set.into());
+
     let mut example_synth = match Synth::new() {
         Ok(synth) => synth,
         Err(err) => {
@@ -305,7 +309,7 @@ fn main() -> SynthResult<()> {
         }
     };
     let output_module = example_synth.get_output_module_mut();
-    output_module.set_audio_input(voice_set.into());
+    output_module.set_audio_input(compressor.into());
 
     // TODO: it's annoying to have to create this as a user. It should be created by the synth
     let mut audio_output = match output::AudioOutput::new(output::OutputDeviceType::Cpal) {
