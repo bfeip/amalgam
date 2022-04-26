@@ -80,6 +80,27 @@ impl SampleRange {
     pub fn get_n_samples(&self) -> usize {
         self.n_samples
     }
+
+    pub fn contains_sample(&self, sample_number: usize) -> bool {
+        if sample_number > self.sample_rate {
+            return false;
+        }
+        if self.n_samples > self.sample_rate {
+            // range contains all samples
+            return true;
+        }
+        if self.initial_value <= sample_number
+        && self.initial_value + self.n_samples > sample_number {
+            // We will simply pass over the sample
+            return true;
+        }
+        if self.initial_value > sample_number 
+        && (self.initial_value + self.n_samples) % self.sample_rate > sample_number {
+            // We will loop around the sample rate and then pass the sample
+            return true;
+        }
+        false
+    }
 }
 
 pub struct SampleRangeIter {
