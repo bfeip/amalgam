@@ -79,6 +79,8 @@ impl Oscillator {
             let freq_value = freq_values[i];
             let sample_rate = sample_rate as f32;
 
+            // TODO: the looping nature of the sample counter is not working here. We need to have some accumulator
+            // that resets when the output of this sin call is sufficiently close to 0.
             buffer[i] = (freq_value * sample_number * TAU / sample_rate).sin();
         }
     }
