@@ -5,12 +5,23 @@
     "version": "0.2.0",
     "configurations": [ 
         {
-            "name": "Run play_from_midi",
+            "name": "Win play_from_midi",
             "type": "cppvsdbg",
             "request": "launch",
             "program": "${workspaceRoot}/target/debug/examples/play_from_midi.exe",
             "args": [],
             "stopAtEntry": false,
+            "cwd": "${workspaceRoot}/target/debug/examples",
+            "preLaunchTask": "cargo build play_from_midi",
+        },
+        {
+            "name": "Lin play_from_midi",
+            "type": "lldb",
+            "sourceLanguages": ["Rust"],
+            "request": "launch",
+            "program": "${workspaceRoot}/target/debug/examples/play_from_midi",
+            "args": [],
+            "stopOnEntry": false,
             "cwd": "${workspaceRoot}/target/debug/examples",
             "preLaunchTask": "cargo build play_from_midi",
         }
