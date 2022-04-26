@@ -96,7 +96,13 @@ impl NoteOutputModule for MidiNoteOutput {
                     // When a note turns on we always create a new interval.
                     // The interval will always have `None` as a end sample. We'll
                     // fill it in if we see an end event
-                    self.active_notes.insert(delta.get_note_number());
+                    let note_number = delta.get_note_number();
+                    debug_assert!(
+                        !self.active_notes.contains(&note_number),
+                        "Activated a note we were already playing"
+                    );
+                    self.active_notes.insert(note_number);
+
                     let note = Note::from_midi_note(delta.get_note_number());
                     let interval = NoteInterval::new(note, Some(sample_num), None);
                     intervals.push(interval);
@@ -104,7 +110,9 @@ impl NoteOutputModule for MidiNoteOutput {
                 midi::data::NoteEventType::Off => {
                     // When a note turns off we find its corresponding interval and add a end sample.
                     // This should always find and interval to end. If it doesn't then something is wrong.
-                    self.active_notes.remove(&delta.get_note_number());
+                    let successfully_removed = self.active_notes.remove(&delta.get_note_number());
+                    debug_assert!(successfully_removed, "Tried to remove an active note that didn't exist");
+
                     let note = Note::from_midi_note(delta.get_note_number());
 
                     for interval in intervals.iter_mut() {
