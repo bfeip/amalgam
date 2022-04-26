@@ -11,12 +11,16 @@ use amalgam::error::*;
 
 #[derive(Clone)]
 struct OscillatorFrequencyOverride {
-    freqs: Vec<Option<f32>>
+    freqs: Vec<Option<f32>>,
+    previous_freq: f32
 }
 
 impl OscillatorFrequencyOverride {
     fn new() -> Self {
-        Self { freqs: Vec::new() }
+        Self { 
+            freqs: Vec::new(),
+            previous_freq: 0.0
+        }
     }
 
     fn set(&mut self, freqs: Vec<Option<f32>>) {
@@ -29,7 +33,13 @@ impl OptionalSignalOutputModule for OscillatorFrequencyOverride {
         let buffer_len = buffer.len();
         assert!(buffer_len == self.freqs.len(), "Mismatched buffers");
         for (buffer_val, &freq) in buffer.iter_mut().zip(self.freqs.iter()) {
-            *buffer_val = freq;
+            if freq.is_some() {
+                *buffer_val = freq;
+                self.previous_freq = freq.unwrap();
+            }
+            else {
+                *buffer_val = Some(self.previous_freq);
+            }
         }
     }
 }
@@ -102,7 +112,7 @@ impl ExampleVoice {
         let mut unconnected_env = Envelope::new();
         let env_trigger: Connectable<EnvelopeTrigger> = EnvelopeTrigger::new().into();
         unconnected_env.set_attack_time(500_f32);
-        unconnected_env.set_release_time(500_f32);
+        unconnected_env.set_release_time(100_f32);
         unconnected_env.set_trigger(env_trigger.clone().into());
         let env: Connectable<Envelope> = unconnected_env.into();
 
@@ -136,7 +146,6 @@ impl Voice for ExampleVoice {
         &mut self, sample_buffer: &mut [f32], intervals: &[note::NoteInterval],
         output_info: &OutputInfo, voice_number: usize
     ) {
-        debug_assert!(!intervals.is_empty(), "Tried to get output with no note intervals");
         let buffer_len = sample_buffer.len();
 
         debug_assert!(
@@ -181,19 +190,20 @@ impl Voice for ExampleVoice {
                 freq_values.push(Some(note_freq));
                 sample_counter += 1;
             }
-            
-            while sample_counter < buffer_len {
-                freq_values.push(None);
-                sample_counter += 1;
-            }
-            {
-                // Lock and set values
-                let mut freq_override = self.freq_override.lock();
-                freq_override.set(freq_values.clone());
-            }
-
-            self.atten.lock().fill_output_buffer(sample_buffer, output_info);
         }
+        
+        // We're done with the intervals, wrap things up.
+        while sample_counter < buffer_len {
+            freq_values.push(None);
+            sample_counter += 1;
+        }
+        {
+            // Lock and set values
+            let mut freq_override = self.freq_override.lock();
+            freq_override.set(freq_values.clone());
+        }
+
+        self.atten.lock().fill_output_buffer(sample_buffer, output_info);
     }
 }
 

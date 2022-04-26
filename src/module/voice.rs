@@ -142,18 +142,8 @@ where
         buffer.fill(0_f32);
         for (voice_number, voice_entry) in self.voice_entries.iter_mut().enumerate() {
             let intervals = &note_intervals_by_voice[voice_number];
-            if intervals.len() == 0 {
-                let source_str = format!("Voice_{}", voice_number);
-                if let Err(err) = self.signal_logger.log(source_str, &vec![0_f32; buffer_len]) {
-                    panic!("Failed to write voice logs: {}", err);
-                }
-                
-                // If there's no notes just skip
-                continue;
-            }
 
             let mut voice_output = vec![0_f32; buffer_len];
-
             voice_entry.voice.fill_output_for_note_intervals(&mut voice_output, intervals, output_info, voice_number);
             for i in 0..voice_output.len() {
                 buffer[i] += voice_output[i];
