@@ -1,7 +1,6 @@
 use crate::note;
 use crate::clock;
 use super::common::*;
-use super::empty::OptionalEmpty;
 
 const PI: f32 = std::f64::consts::PI as f32;
 const TAU: f32 = PI * 2.0;
@@ -35,7 +34,7 @@ impl Oscillator {
         let waveform = Waveform::Sine;
         let frequency = note::FREQ_C;
         let pulse_width = 0.5;
-        let freq_override_input = OptionalEmpty::new().into();
+        let freq_override_input = Connectable::empty();
         Oscillator { waveform, frequency, pulse_width, freq_override_input }
     }
 
@@ -157,8 +156,9 @@ impl SignalOutputModule for Oscillator {
 
         // Get freq override input
         let mut freq_override_buffer = vec![None; buffer_len];
-        let mut freq_override_module = self.freq_override_input.lock();
-        freq_override_module.fill_optional_output_buffer(freq_override_buffer.as_mut_slice(), output_info);
+        if let Some(mut freq_override_module) = self.freq_override_input.get() {
+            freq_override_module.fill_optional_output_buffer(freq_override_buffer.as_mut_slice(), output_info);
+        };
 
         self.fill(data, &output_info.current_sample_range, &freq_override_buffer);
     }

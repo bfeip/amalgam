@@ -1,7 +1,6 @@
 pub mod common;
 pub mod error;
 
-pub mod empty;
 pub mod sample_buffer;
 pub mod compressor;
 pub mod attenuverter;
@@ -14,7 +13,6 @@ pub mod midi;
 pub mod output;
 pub mod voice;
 
-pub use empty::Empty;
 pub use compressor::Compressor;
 pub use attenuverter::Attenuverter;
 pub use noise::NoiseGenerator;

@@ -1,5 +1,4 @@
 use super::common::{Connectable, SignalOutputModule, OutputInfo};
-use super::empty::Empty;
 
 /// A structure representing controls that would typically be on a output module
 /// of a modular synth.
@@ -13,7 +12,7 @@ impl Output {
     pub fn new() -> Self {
         let volume = 1.0;
         let panning = 0.5;
-        let audio_input = Empty::new().into();
+        let audio_input = Connectable::empty();
 
         Self { volume, panning, audio_input }
     }
@@ -45,7 +44,9 @@ impl SignalOutputModule for Output {
         let mut mono_channel_buffer = vec![0.0; mono_channel_len];
 
         // Get the audio for the one channel
-        self.audio_input.lock().fill_output_buffer(&mut mono_channel_buffer, output_info);
+        if let Some(mut audio_input) = self.audio_input.get() {
+            audio_input.fill_output_buffer(&mut mono_channel_buffer, output_info);
+        };
 
         // fill the final buffer with multi-channel data
         let output_chunk_iter = data.chunks_mut(channel_count_usize);

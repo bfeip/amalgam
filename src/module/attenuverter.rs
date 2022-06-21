@@ -1,5 +1,4 @@
 use super::common::{Connectable, SignalOutputModule, OutputInfo};
-use super::Empty;
 
 #[derive(Clone)]
 pub struct Attenuverter {
@@ -11,8 +10,8 @@ pub struct Attenuverter {
 
 impl Attenuverter {
     pub fn new() -> Self {
-        let signal_in = Empty::new().into();
-        let control_in = Empty::new().into();
+        let signal_in = Connectable::empty();
+        let control_in = Connectable::empty();
         let gain = 0_f32;
         let control_gain = 1_f32;
         Self { signal_in, control_in, gain, control_gain }
@@ -48,15 +47,19 @@ impl SignalOutputModule for Attenuverter {
         // Get raw, unattenuated signal
         let mut raw_signal = vec![0.0; buffer_len];
         {
-            let mut locked_signal_in = self.signal_in.lock();
-            locked_signal_in.fill_output_buffer(&mut raw_signal, output_info);
+            let locked_signal_in = self.signal_in.get();
+            if let Some(mut signal_in) = locked_signal_in {
+                signal_in.fill_output_buffer(&mut raw_signal, output_info);   
+            }
         }
 
         // Get control signal
         let mut control = vec![0.0; buffer_len];
         {
-            let mut locked_control_in = self.control_in.lock();
-            locked_control_in.fill_output_buffer(&mut control, output_info)
+            let locked_control_in = self.control_in.get();
+            if let Some(mut control_in) = locked_control_in {
+                control_in.fill_output_buffer(&mut control, output_info);
+            }
         }
 
         for i in 0..buffer_len {

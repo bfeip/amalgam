@@ -51,7 +51,9 @@ where
         let mut voice_entries = Vec::with_capacity(max_voices);
         {
             // Lock block
-            let reference_voice_lock = reference_voice.lock();
+            let reference_voice_lock = reference_voice.get().expect(
+                "Tried to create voice set with empty voices"
+            );
             for _ in 0..max_voices {
                 let voice = reference_voice_lock.clone();
                 let voice_entry = VoiceEntry { voice, playing_note: None };
@@ -87,7 +89,7 @@ where
         let buffer_len = buffer.len();
 
         let note_intervals = {
-            self.note_source.lock().get_output(buffer_len, output_info)
+            self.note_source.get().unwrap().get_output(buffer_len, output_info)
         };
 
         // Setup voices to play the note intervals that were continuing to play from last sample period
@@ -226,8 +228,8 @@ mod tests {
 
     impl Voice for TestVoice {
         fn update(&mut self, reference: &Self) {
-            let ref_osc = reference.osc.lock();
-            let mut osc = self.osc.lock();
+            let ref_osc = reference.osc.get().unwrap();
+            let mut osc = self.osc.get().unwrap();
 
             osc.set_pulse_width(ref_osc.get_pulse_width());
             osc.set_waveform(ref_osc.get_waveform());
@@ -279,11 +281,11 @@ mod tests {
             }
             {
                 // Lock and set values
-                let mut freq_override = self.freq_override.lock();
+                let mut freq_override = self.freq_override.get().unwrap();
                 freq_override.set(freq_values.clone());
             }
 
-            self.osc.lock().fill_output_buffer(sample_buffer, output_info);
+            self.osc.get().unwrap().fill_output_buffer(sample_buffer, output_info);
             for (sample, &freq) in sample_buffer.iter_mut().zip(freq_values.iter()) {
                 if freq.is_none() {
                     // Do not play if no note was active

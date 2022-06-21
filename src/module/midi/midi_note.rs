@@ -2,6 +2,7 @@ use super::super::error::ModuleResult;
 use super::super::common::{NoteOutputModule, OutputInfo, OutputTimestamp};
 use super::super::midi::MidiModuleBase;
 use crate::midi;
+use crate::midi::data::NoteDelta;
 use crate::module::common::Connectable;
 use crate::note::{Note, NoteInterval};
 
@@ -20,16 +21,22 @@ impl MidiNoteOutput {
 
     // Gets all notes that are currently on
     pub fn get_notes_on_absolute(&self) -> ModuleResult<HashSet<u8>> {
-        let midi_src = self.midi_source.lock();
-        midi_src.get_notes_on_absolute()
+        let midi_src = self.midi_source.get();
+        if midi_src.is_none() {
+            return Ok(HashSet::new());
+        }
+        midi_src.unwrap().get_notes_on_absolute()
     }
     
     /// Gets changes in note state since the last time this was called
     fn consume_notes_on_off_delta(
         &mut self, n_microseconds: usize, timestamp: &OutputTimestamp
     ) -> ModuleResult<midi::data::NoteDelta> {
-        let mut midi_src = self.midi_source.lock();
-        midi_src.consume_notes_on_off_delta(n_microseconds, timestamp)
+        let midi_src = self.midi_source.get();
+        if midi_src.is_none() {
+            return Ok(NoteDelta::new(0));
+        }
+        midi_src.unwrap().consume_notes_on_off_delta(n_microseconds, timestamp)
     }
 
     fn get_active_notes(&self) -> &HashSet<u8> {
@@ -41,7 +48,12 @@ impl NoteOutputModule for MidiNoteOutput {
     fn get_output(&mut self, n_samples: usize, output_info: &OutputInfo) -> Vec<NoteInterval> {
         // TODO: This does not take retriggers into account. In a normal synth if a note went off and on again
         // at the same instant the envelope would be retriggered. But that doesn't happen here... 
-        let mut midi_source_lock = self.midi_source.lock();
+        let mut midi_source_lock = match self.midi_source.get() {
+            Some(midi_source_lock) => midi_source_lock,
+            None => {
+                return Vec::new();
+            }
+        };
 
         // Some timing stuff
         // (n_samples / sample_rate) * 1,000,000
@@ -155,7 +167,7 @@ mod tests {
     #[test]
     fn get_notes_delta() {
         let mut midi_module = get_test_midi_module();
-        let mut midi_source_lock = midi_module.midi_source.lock();
+        let mut midi_source_lock = midi_module.midi_source.get().unwrap();
         midi_source_lock.set_channel(Some(0));
         drop(midi_source_lock);
 
@@ -184,7 +196,7 @@ mod tests {
         let midi_module = get_test_midi_module();
 
         let target_microseconds = 5_000_000; // Just trust me bro. It'll have three notes on
-        let mut midi_source_lock = midi_module.midi_source.lock();
+        let mut midi_source_lock = midi_module.midi_source.get().unwrap();
         midi_source_lock.set_time(target_microseconds);
         midi_source_lock.set_channel(Some(0));
         drop(midi_source_lock);

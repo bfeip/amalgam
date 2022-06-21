@@ -123,28 +123,52 @@ pub trait NoteOutputModule: Send {
 }
 
 pub struct Connectable<T: ?Sized> {
-    ptr: Arc<Mutex<T>>
+    ptr: Option<Arc<Mutex<T>>>
 }
 
 impl<T> Connectable<T> {
-    pub fn new(inner: T) -> Self {
-        let ptr = Arc::new(Mutex::new(inner));
+    pub fn new(inner: Option<T>) -> Self {
+        if inner.is_some() {
+            let ptr = Some(Arc::new(Mutex::new(inner.unwrap())));
+            return Self { ptr };
+        }
+        let ptr = None;
         Self { ptr }
     }
 }
 
 impl<T: ?Sized> Connectable<T> {
-    pub fn from_arc_mutex(ptr: Arc<Mutex<T>>) -> Self {
+    pub fn empty() -> Self {
+        Self { ptr: None }
+    }
+
+    pub fn from_arc_mutex(arc_mutex: Arc<Mutex<T>>) -> Self {
+        let ptr = Some(arc_mutex);
         Self{ ptr }
     }
 
-    pub fn lock(&self) -> MutexGuard<T> {
-        self.ptr.lock().expect("Lock was poisoned!")
+    pub fn is_some(&self) -> bool {
+        self.ptr.is_some()
+    }
+
+    pub fn is_none(&self) -> bool {
+        self.ptr.is_none()
+    }
+
+    pub fn get(&self) -> Option<MutexGuard<T>> {
+        match &self.ptr {
+            Some(ptr) => {
+                let lock_result = ptr.lock();
+                Some(lock_result.unwrap())
+            },
+            None => None
+        }
     }
 }
 
+// TODO: it might be some nice sugar to change this to return an Option<MutexGuard>.
 impl<T> Deref for Connectable<T> {
-    type Target = Arc<Mutex<T>>;
+    type Target = Option<Arc<Mutex<T>>>;
     fn deref(&self) -> &Self::Target {
         &self.ptr
     }
@@ -152,7 +176,7 @@ impl<T> Deref for Connectable<T> {
 
 impl<T> From<T> for Connectable<T> {
     fn from(inner: T) -> Self {
-        Connectable::new(inner)
+        Connectable::new(Some(inner))
     }
 }
 
@@ -160,14 +184,19 @@ macro_rules! connectable_impl_from {
     ($module_trait:ident) => {
         impl<T: $module_trait + 'static> From<T> for Connectable<dyn $module_trait> {
             fn from(inner: T) -> Self {
-                let ptr = Arc::new(Mutex::new(inner));
+                let inner_ptr: Arc<Mutex<dyn $module_trait>> = Arc::new(Mutex::new(inner));
+                let ptr = Some(inner_ptr);
                 Self { ptr }
             }
         }
         
         impl<T: $module_trait + 'static> From<Connectable<T>> for Connectable<dyn $module_trait> {
             fn from(other: Connectable<T>) -> Self {
-                let ptr = other.ptr;
+                if other.ptr.is_none() {
+                    return Self { ptr: None }
+                }
+                let inner_ptr: Arc<Mutex<(dyn $module_trait)>> = other.ptr.unwrap().clone();
+                let ptr = Some(inner_ptr);
                 Self { ptr }
             }
         }

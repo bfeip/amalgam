@@ -1,5 +1,4 @@
 use super::common::{SignalOutputModule, OutputInfo, Connectable};
-use super::empty::Empty;
 
 #[derive(Debug, Clone, Copy, Hash)]
 enum Adsr {
@@ -36,7 +35,7 @@ impl Envelope {
         let stage = Adsr::Done;
         let previous_value = 0.0;
 
-        let trigger = Empty::new().into();
+        let trigger = Connectable::empty();
         let trigger_tolerance = 0.5;
         let triggered = false;
 
@@ -177,7 +176,17 @@ impl SignalOutputModule for Envelope {
         let data_size = data.len();
         let mut trigger_data = Vec::with_capacity(data_size);
         trigger_data.resize(data_size, 0.0);
-        self.trigger.lock().fill_output_buffer(&mut trigger_data, output_info);
+
+        {
+            let mut trigger_lock = match self.trigger.get() {
+                Some(trigger_lock) => trigger_lock,
+                None => {
+                    data.fill(0.0);
+                    return;
+                }
+            };
+            trigger_lock.fill_output_buffer(&mut trigger_data, output_info);
+        }
 
         for (i, datum) in data.iter_mut().enumerate() {
             let triggered = trigger_data[i] > self.trigger_tolerance;

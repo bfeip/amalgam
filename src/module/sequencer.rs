@@ -1,6 +1,5 @@
 use super::common::{SignalOutputModule, OutputInfo, EdgeDetection, Connectable};
 use super::error::*;
-use super::empty::Empty;
 
 const DEFAULT_STEP_INFO: StepInfo = StepInfo {
     kind: SequencerStepKind::Normal,
@@ -41,7 +40,7 @@ impl Sequencer {
         let cycle = true;
         let current_step = 0_usize;
 
-        let clock = Empty::new().into();
+        let clock = Connectable::empty();
         let edge_detection = EdgeDetection::Falling;
         let edge_tolerance = 0.8_f32;
         Self { steps, playing, cycle, current_step, clock, edge_detection, edge_tolerance }
@@ -57,7 +56,7 @@ impl Sequencer {
         let cycle = true;
         let current_step = 0_usize;
 
-        let clock = Empty::new().into();
+        let clock = Connectable::empty();
         let edge_detection = EdgeDetection::Falling;
         let edge_tolerance = 0.8_f32;
         Self { steps, playing, cycle, current_step, clock, edge_detection, edge_tolerance }
@@ -229,9 +228,11 @@ impl SignalOutputModule for Sequencer {
         if self.playing {
             // We are playing which means which step we are on is subject to change
             let mut clock_signals = Vec::with_capacity(data_size);
-            clock_signals.resize(data_size, 0_f32); // NOTE: initializing this vec isn't really needed, but is safe
-            self.clock.lock().fill_output_buffer(&mut clock_signals, output_info);
-            println!("{:?}", clock_signals);
+            clock_signals.resize(data_size, 0_f32);
+            if let Some(mut clock) = self.clock.get() {
+                clock.fill_output_buffer(&mut clock_signals, output_info)
+            }
+
             let mut data_filled = 0_usize;
             for i in 1..data_size {
                 // Step the sequence

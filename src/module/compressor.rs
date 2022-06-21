@@ -1,5 +1,4 @@
 use super::common::*;
-use super::empty::Empty;
 
 const MICROSECONDS_PER_SECOND: f32 = 1_000_000.0;
 
@@ -12,8 +11,7 @@ pub struct Compressor {
 
 impl Compressor {
     pub fn new() -> Self {
-        let empty = Empty::new();
-        let signal_in = empty.into();
+        let signal_in = Connectable::empty();
         let slew_time = MICROSECONDS_PER_SECOND;
         let compression_factor = 1.0;
         let over_compression = 0.1;
@@ -39,7 +37,15 @@ impl SignalOutputModule for Compressor {
 
         // Get signal from input
         let mut signal = vec![0.0; buffer_len];
-        let mut input_lock = self.signal_in.lock();
+        let mut input_lock = match self.signal_in.get() {
+            Some(input_lock) => input_lock,
+            None => {
+                // No input, fill with 0.0
+                buffer.fill(0.0);
+                return;
+            }
+        };
+
         input_lock.fill_output_buffer(&mut signal, output_info);
         drop(input_lock);
 

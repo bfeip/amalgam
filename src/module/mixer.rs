@@ -1,7 +1,6 @@
 use crate::prelude::*;
 use super::common::{SignalOutputModule, OutputInfo, CompressionMode, compress_audio, Connectable};
 use super::error::*;
-use super::empty::Empty;
 
 pub struct MixerInput {
     input: Connectable<dyn SignalOutputModule>,
@@ -10,7 +9,7 @@ pub struct MixerInput {
 
 impl MixerInput {
     pub fn new() -> Self {
-        let input = Empty::new().into();
+        let input = Connectable::empty();
         let level = 1_f32;
         Self { input, level }
     }
@@ -86,7 +85,7 @@ impl SignalOutputModule for Mixer {
         data_buffer.resize(data_len, 0.0);
         for i in 0..input_len {
             let input = &mut self.inputs[i];
-            let mut signal_input_lock = input.input.lock();
+            let mut signal_input_lock = input.input.get().unwrap();
             signal_input_lock.fill_output_buffer(&mut data_buffer, output_info);
 
             // Apply the level if we need to
