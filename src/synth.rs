@@ -1,7 +1,7 @@
 use super::error::{SynthResult, SynthError};
-use super::module::output::Output;
+use super::module::Output;
 use super::module::common::{SignalOutputModule, OutputInfo, OutputTimestamp};
-use super::output::{AudioOutput};
+use super::output::AudioInterface;
 use super::clock;
 use super::SignalLogger;
 
@@ -40,23 +40,11 @@ impl Synth {
         &mut self.output_module
     }
 
-    pub fn play(synth: Arc<Mutex<Self>>, audio_output: &mut AudioOutput) -> SynthResult<()> {
-        let sample_type = match audio_output.get_sample_format() {
-            Some(sample_type) => sample_type,
-            None => {
-                let msg = "Tried to play from Synth that has un-configured audio output";
-                return Err(SynthError::new(msg));
-            }
-        };
+    pub fn play(synth: Arc<Mutex<Self>>, audio_interface: &mut AudioInterface) -> SynthResult<()> {
+        let sample_type = audio_interface.get_sample_format();
 
         // Get and store the sample rate
-        let new_sample_rate = match audio_output.get_sample_rate() {
-            Some(sample_rate) => sample_rate.0 as usize,
-            None => {
-                let msg = "Failed to get sample rate while trying to play synth";
-                return Err(SynthError::new(msg));
-            }
-        };
+        let new_sample_rate = audio_interface.get_sample_rate().0 as usize;
 
         // Mutex block so that synth is unlocked at the end of this block
         {
@@ -81,14 +69,14 @@ impl Synth {
         }
 
         match sample_type {
-            cpal::SampleFormat::F32 => Self::play_with_cpal::<f32>(synth, audio_output),
-            cpal::SampleFormat::I16 => Self::play_with_cpal::<i16>(synth, audio_output),
-            cpal::SampleFormat::U16 => Self::play_with_cpal::<u16>(synth, audio_output)
+            cpal::SampleFormat::F32 => Self::play_with_cpal::<f32>(synth, audio_interface),
+            cpal::SampleFormat::I16 => Self::play_with_cpal::<i16>(synth, audio_interface),
+            cpal::SampleFormat::U16 => Self::play_with_cpal::<u16>(synth, audio_interface)
         }
     }
 
-    fn play_with_cpal<T: cpal::Sample>(synth: Arc<Mutex<Self>>, audio_output: &mut AudioOutput) -> SynthResult<()> {
-        let channel_count = audio_output.get_channel_count().unwrap();
+    fn play_with_cpal<T: cpal::Sample>(synth: Arc<Mutex<Self>>, audio_interface: &mut AudioInterface) -> SynthResult<()> {
+        let channel_count = audio_interface.get_channel_count();
 
         // Create a callback to pass to CPAL to output the audio. This'll get passed to a different thread that
         // will actually play the audio.
@@ -156,12 +144,12 @@ impl Synth {
             }
         };
 
-        if let Err(err) = audio_output.set_output_callback(output_callback) {
+        if let Err(err) = audio_interface.set_stream_callback(output_callback) {
             let msg = format!("Failed to play from Synth because we couldn't set the output callback: {}", err);
             return Err(SynthError::new(&msg));
         }
 
-        if let Err(err) = audio_output.play() {
+        if let Err(err) = audio_interface.play() {
             let msg = format!("Failed to play audio stream: {}", err);
             return Err(SynthError::new(&msg))
         }

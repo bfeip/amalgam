@@ -57,7 +57,7 @@ impl ModuleManager {
         self.modules.get(&key)
     }
 
-    fn get_mut(&self, key: ModuleKey) -> Option<&mut Module> {
+    fn get_mut(&mut self, key: ModuleKey) -> Option<&mut Module> {
         self.modules.get_mut(&key)
     }
 
