@@ -1,10 +1,12 @@
 # TODO
 
+## Right Now
+- Fill out Module enum
+
 ## Public API rework
-The current API is very heavy handed and exposes some logic that ought to be internal, particularly with respect to threading. I should redesign this.
+The current API is very heavy handed and exposes some logic that ought to be internal, particularly with respect to threading. I should redesign this. Special care needs to be taken about polyphony. Maybe we want to undo that work and completely re-implement it since currently it requires a whole bunch of bullshit.
 
 ### How it currently works
-
 - The user creates a `Synth` object and an `AudioOutput` object
     - They should not have to create both, I know there's a reason why they're separate that has to do with the audio thread but... It's just annoying
 - The user creates their modules and is required to wrap them in a `Connectable` type wrapper
@@ -16,7 +18,6 @@ The current API is very heavy handed and exposes some logic that ought to be int
 - Then the `Synth::play` method is called with a reference to the audio output
 
 ### How it should work
-
 - User creates a top level `Synth` object.
     - This should also like, create the audio output object. I don't care how I need to re-jigger the threading problems. It's unreasonable that these should be created separately.
 - User creates some modules. I think modules either ought to be registered in the synth, or created through it.

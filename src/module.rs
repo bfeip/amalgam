@@ -1,17 +1,17 @@
 pub mod common;
 pub mod error;
 
-pub mod sample_buffer;
-pub mod compressor;
-pub mod attenuverter;
-pub mod noise;
-pub mod oscillator;
-pub mod sequencer;
-pub mod mixer;
-pub mod envelope;
-pub mod midi;
-pub mod output;
-pub mod voice;
+mod sample_buffer;
+mod compressor;
+mod attenuverter;
+mod noise;
+mod oscillator;
+mod sequencer;
+mod mixer;
+mod envelope;
+mod midi;
+mod output;
+mod voice;
 
 pub use compressor::Compressor;
 pub use attenuverter::Attenuverter;
@@ -24,3 +24,44 @@ pub use midi::MidiModuleBase;
 pub use midi::midi_note::MidiNoteOutput;
 pub use output::Output;
 pub use voice::{Voice, VoiceSet};
+
+use std::collections::HashMap;
+
+type ModuleKey = usize;
+
+enum Module {
+    Oscillator(Oscillator)
+}
+
+struct ModuleManager {
+    modules: HashMap<ModuleKey, Module>,
+    next_key: ModuleKey
+}
+
+impl ModuleManager {
+    fn new() -> Self {
+        Self {
+            modules: HashMap::new(),
+            next_key: 0
+        }
+    }
+
+    fn add(&mut self, module: Module) -> ModuleKey {
+        self.modules.insert(self.next_key, module);
+        let ret = self.next_key;
+        self.next_key += 1;
+        ret
+    }
+
+    fn get(&self, key: ModuleKey) -> Option<&Module> {
+        self.modules.get(&key)
+    }
+
+    fn get_mut(&self, key: ModuleKey) -> Option<&mut Module> {
+        self.modules.get_mut(&key)
+    }
+
+    fn remove(&mut self, key: ModuleKey) -> Option<Module> {
+        self.modules.remove(&key)
+    }
+}
