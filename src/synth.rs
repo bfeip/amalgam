@@ -1,3 +1,5 @@
+use crate::module::ModuleManager;
+
 use super::error::{SynthResult, SynthError};
 use super::module::Output;
 use super::module::common::{SignalOutputModule, OutputInfo, OutputTimestamp};
@@ -14,7 +16,8 @@ pub struct Synth {
     output_module: Output,
     sample_rate: usize,
     master_sample_clock: clock::SampleClock,
-    signal_logger: SignalLogger
+    signal_logger: SignalLogger,
+    module_manager: ModuleManager
 }
 
 impl Synth {
@@ -27,8 +30,9 @@ impl Synth {
         let signal_logger = SignalLogger::new("final_signal.txt");
         #[cfg(not(feature = "signal_logging"))]
         let signal_logger = SignalLogger::new_sink();
+        let module_manager = ModuleManager::new();
 
-        let synth = Synth { output_module, sample_rate, master_sample_clock, signal_logger };
+        let synth = Synth { output_module, sample_rate, master_sample_clock, signal_logger, module_manager };
         Ok(synth)
     }
 
@@ -107,7 +111,7 @@ impl Synth {
 
             #[cfg(feature = "audio_printing")]
             let computation_started = time::Instant::now();
-            locked_synth.output_module.fill_output_buffer(&mut f32_buffer, &output_info);
+            locked_synth.output_module.fill_output_buffer(&mut f32_buffer, &output_info, &mut locked_synth.module_manager);
             for i in 0..buffer_length {
                 sample_buffer[i] = T::from(&f32_buffer[i]);
             }

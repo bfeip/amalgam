@@ -1,28 +1,29 @@
-use super::common::{Connectable, SignalOutputModule, OutputInfo};
+use super::common::{SignalOutputModule, OutputInfo};
+use super::{ModuleKey, ModuleManager, NULL_KEY};
 
 #[derive(Clone)]
 pub struct Attenuverter {
-    signal_in: Connectable<dyn SignalOutputModule>,
-    control_in: Connectable<dyn SignalOutputModule>,
+    signal_in_key: ModuleKey,
+    control_in_key: ModuleKey,
     gain: f32,
     control_gain: f32,
 }
 
 impl Attenuverter {
     pub fn new() -> Self {
-        let signal_in = Connectable::empty();
-        let control_in = Connectable::empty();
+        let signal_in = NULL_KEY;
+        let control_in = NULL_KEY;
         let gain = 0_f32;
         let control_gain = 1_f32;
-        Self { signal_in, control_in, gain, control_gain }
+        Self { signal_in_key: signal_in, control_in_key: control_in, gain, control_gain }
     }
 
-    pub fn set_signal_in(&mut self, signal_in: Connectable<dyn SignalOutputModule>) {
-        self.signal_in = signal_in;
+    pub fn set_signal_in(&mut self, signal_in: ModuleKey) {
+        self.signal_in_key = signal_in;
     }
 
-    pub fn set_control_in(&mut self, control_in: Connectable<dyn SignalOutputModule>) {
-        self.control_in = control_in;
+    pub fn set_control_in(&mut self, control_in: ModuleKey) {
+        self.control_in_key = control_in;
     }
 
     pub fn set_gain(&mut self, gain: f32) {
@@ -41,25 +42,19 @@ impl Attenuverter {
 }
 
 impl SignalOutputModule for Attenuverter {
-    fn fill_output_buffer(&mut self, buffer: &mut [f32], output_info: &OutputInfo) {
+    fn fill_output_buffer(&mut self, buffer: &mut [f32], output_info: &OutputInfo, manager: &mut ModuleManager) {
         let buffer_len = buffer.len();
 
         // Get raw, unattenuated signal
         let mut raw_signal = vec![0.0; buffer_len];
-        {
-            let locked_signal_in = self.signal_in.get();
-            if let Some(mut signal_in) = locked_signal_in {
-                signal_in.fill_output_buffer(&mut raw_signal, output_info);   
-            }
+        if let Some(signal_in) = manager.get_mut(self.signal_in_key) {
+            signal_in.fill_output_buffer(&mut raw_signal, output_info, manager);   
         }
 
         // Get control signal
         let mut control = vec![0.0; buffer_len];
-        {
-            let locked_control_in = self.control_in.get();
-            if let Some(mut control_in) = locked_control_in {
-                control_in.fill_output_buffer(&mut control, output_info);
-            }
+        if let Some(control_in) = manager.get_mut(self.control_in_key) {
+            control_in.fill_output_buffer(&mut control, output_info, manager);   
         }
 
         for i in 0..buffer_len {

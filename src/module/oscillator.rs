@@ -1,5 +1,8 @@
 use crate::note;
 use crate::clock;
+use super::ModuleKey;
+use super::ModuleManager;
+use super::NULL_KEY;
 use super::common::*;
 
 const PI: f32 = std::f64::consts::PI as f32;
@@ -25,7 +28,8 @@ pub struct Oscillator {
     frequency: f32,
     /// Width of the pulse. Only used for pulse waveforms. 50% is square, 0% and 100% are silent
     pulse_width: f32,
-    freq_override_input: Connectable<dyn OptionalSignalOutputModule>
+    /// Linear freq modulation input
+    linear_freq_input: ModuleKey,
 }
 
 impl Oscillator {
@@ -34,8 +38,8 @@ impl Oscillator {
         let waveform = Waveform::Sine;
         let frequency = note::FREQ_C;
         let pulse_width = 0.5;
-        let freq_override_input = Connectable::empty();
-        Oscillator { waveform, frequency, pulse_width, freq_override_input }
+        let linear_freq_input = NULL_KEY;
+        Oscillator { waveform, frequency, pulse_width, linear_freq_input }
     }
 
     pub fn set_waveform(&mut self, waveform: Waveform) {
@@ -62,10 +66,10 @@ impl Oscillator {
         self.pulse_width
     }
 
-    pub fn set_frequency_override_input(
-        &mut self, override_input: Connectable<dyn OptionalSignalOutputModule>
+    pub fn set_linear_freq_input(
+        &mut self, override_input: ModuleKey
     ) {
-        self.freq_override_input = override_input;
+        self.linear_freq_input = override_input;
     }
 
     fn fill_sine(&self, buffer: &mut [f32], sample_range: &clock::SampleRange, freq_values: &[f32]) {
@@ -128,16 +132,14 @@ impl Oscillator {
     }
 
     fn fill(
-        &self, buffer: &mut [f32], sample_range: &clock::SampleRange, freq_override_buffer: &[Option<f32>]
+        &self, buffer: &mut [f32], sample_range: &clock::SampleRange, freq_override_buffer: &[f32]
     ) {
         let buffer_len = buffer.len();
 
         // Compute frequency per sample
         let mut freq_values = vec![self.frequency; buffer_len];
         for (freq_value, &freq_override_elem) in freq_values.iter_mut().zip(freq_override_buffer.iter()) {
-            if freq_override_elem.is_some() {
-                *freq_value = freq_override_elem.unwrap();
-            }
+            *freq_value += freq_override_elem;
         }
 
         match self.waveform {
@@ -151,16 +153,16 @@ impl Oscillator {
 }
 
 impl SignalOutputModule for Oscillator {
-    fn fill_output_buffer(&mut self, data: &mut [f32], output_info: &OutputInfo) {
+    fn fill_output_buffer(&mut self, data: &mut [f32], output_info: &OutputInfo, manager: &mut ModuleManager) {
         let buffer_len = data.len();
 
         // Get freq override input
-        let mut freq_override_buffer = vec![None; buffer_len];
-        if let Some(mut freq_override_module) = self.freq_override_input.get() {
-            freq_override_module.fill_optional_output_buffer(freq_override_buffer.as_mut_slice(), output_info);
+        let mut linear_freq_input_buffer = vec![0.0; buffer_len];
+        if let Some(freq_override_module) = manager.get_mut(self.linear_freq_input) {
+            freq_override_module.fill_output_buffer(linear_freq_input_buffer.as_mut_slice(), output_info, manager);
         };
 
-        self.fill(data, &output_info.current_sample_range, &freq_override_buffer);
+        self.fill(data, &output_info.current_sample_range, &linear_freq_input_buffer);
     }
 }
 

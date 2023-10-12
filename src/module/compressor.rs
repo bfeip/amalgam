@@ -1,9 +1,9 @@
-use super::common::*;
+use super::{common::*, ModuleKey, NULL_KEY, ModuleManager};
 
 const MICROSECONDS_PER_SECOND: f32 = 1_000_000.0;
 
 pub struct Compressor {
-    signal_in: Connectable<dyn SignalOutputModule>,
+    signal_in_key: ModuleKey,
     slew_time: f32, // microseconds
     compression_factor: f32,
     over_compression: f32, // A boost to the initial compression factor
@@ -11,15 +11,15 @@ pub struct Compressor {
 
 impl Compressor {
     pub fn new() -> Self {
-        let signal_in = Connectable::empty();
+        let signal_in_key = NULL_KEY;
         let slew_time = MICROSECONDS_PER_SECOND;
         let compression_factor = 1.0;
         let over_compression = 0.1;
-        Compressor { signal_in, slew_time, compression_factor, over_compression }
+        Compressor { signal_in_key, slew_time, compression_factor, over_compression }
     }
 
-    pub fn set_signal_in(&mut self, input: Connectable<dyn SignalOutputModule>) {
-        self.signal_in = input;
+    pub fn set_signal_in(&mut self, input: ModuleKey) {
+        self.signal_in_key = input;
     }
 
     pub fn set_slew_time(&mut self, slew_time: f32) {
@@ -32,22 +32,18 @@ impl Compressor {
 }
 
 impl SignalOutputModule for Compressor {
-    fn fill_output_buffer(&mut self, buffer: &mut [f32], output_info: &OutputInfo) {
+    fn fill_output_buffer(&mut self, buffer: &mut [f32], output_info: &OutputInfo, manager: &mut ModuleManager) {
         let buffer_len = buffer.len();
 
         // Get signal from input
         let mut signal = vec![0.0; buffer_len];
-        let mut input_lock = match self.signal_in.get() {
-            Some(input_lock) => input_lock,
-            None => {
-                // No input, fill with 0.0
-                buffer.fill(0.0);
-                return;
-            }
-        };
-
-        input_lock.fill_output_buffer(&mut signal, output_info);
-        drop(input_lock);
+        if let Some(signal_in) = manager.get_mut(self.signal_in_key) {
+            signal_in.fill_output_buffer(&mut signal, output_info, manager)
+        }
+        else {
+            buffer.fill(0.0);
+            return;
+        }
 
         let mut compression_factor = self.compression_factor;
         for i in 0..buffer_len {

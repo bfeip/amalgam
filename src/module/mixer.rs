@@ -1,25 +1,25 @@
 use crate::prelude::*;
-use super::common::{SignalOutputModule, OutputInfo, CompressionMode, compress_audio, Connectable};
-use super::error::*;
+use super::common::{SignalOutputModule, OutputInfo, CompressionMode, compress_audio};
+use super::{error::*, ModuleKey, NULL_KEY, ModuleManager};
 
 pub struct MixerInput {
-    input: Connectable<dyn SignalOutputModule>,
+    input: ModuleKey,
     level: f32
 }
 
 impl MixerInput {
     pub fn new() -> Self {
-        let input = Connectable::empty();
+        let input = NULL_KEY;
         let level = 1_f32;
         Self { input, level }
     }
 
-    pub fn with_input(input: Connectable<dyn SignalOutputModule>) -> Self {
+    pub fn with_input(input: ModuleKey) -> Self {
         let level = 1_f32;
         Self { input, level }
     }
 
-    pub fn set_input(&mut self, input: Connectable<dyn SignalOutputModule>) {
+    pub fn set_input(&mut self, input: ModuleKey) {
         self.input = input;
     }
 
@@ -72,7 +72,7 @@ impl Mixer {
 }
 
 impl SignalOutputModule for Mixer {
-    fn fill_output_buffer(&mut self, data: &mut [f32], output_info: &OutputInfo) {
+    fn fill_output_buffer(&mut self, data: &mut [f32], output_info: &OutputInfo, manager: &mut ModuleManager) {
         let data_len = data.len();
         let input_len = self.inputs.len();
 
@@ -85,8 +85,12 @@ impl SignalOutputModule for Mixer {
         data_buffer.resize(data_len, 0.0);
         for i in 0..input_len {
             let input = &mut self.inputs[i];
-            let mut signal_input_lock = input.input.get().unwrap();
-            signal_input_lock.fill_output_buffer(&mut data_buffer, output_info);
+            if let Some(signal_input) = manager.get_mut(input.input) {
+                signal_input.fill_output_buffer(&mut data_buffer, output_info, manager);
+            }
+            else {
+                continue;
+            }
 
             // Apply the level if we need to
             if !float_eq(input.level, 1.0, 0.000001) {

@@ -2,6 +2,10 @@
 
 ## Right Now
 - Fill out Module enum
+- Remove Optional and Note output modules. Modules should only output signals
+    - Anything else is not a module
+- We might want to handle errors in the audio loop when we try to look up a modules in the module manager but can't find it
+- How MIDI notes are read needs a tune up for sure.
 
 ## Public API rework
 The current API is very heavy handed and exposes some logic that ought to be internal, particularly with respect to threading. I should redesign this. Special care needs to be taken about polyphony. Maybe we want to undo that work and completely re-implement it since currently it requires a whole bunch of bullshit.
