@@ -1,25 +1,27 @@
+use std::rc::Rc;
+
 use crate::prelude::*;
-use super::common::{SignalOutputModule, OutputInfo, CompressionMode, compress_audio};
-use super::{error::*, ModuleKey, NULL_KEY, ModuleManager};
+use super::common::{SynthModule, OutputInfo, CompressionMode, compress_audio};
+use super::error::*;
 
 pub struct MixerInput {
-    input: ModuleKey,
+    input: Option<Rc<dyn SynthModule>>,
     level: f32
 }
 
 impl MixerInput {
     pub fn new() -> Self {
-        let input = NULL_KEY;
+        let input = None;
         let level = 1_f32;
         Self { input, level }
     }
 
-    pub fn with_input(input: ModuleKey) -> Self {
+    pub fn with_input(input: Option<Rc<dyn SynthModule>>) -> Self {
         let level = 1_f32;
         Self { input, level }
     }
 
-    pub fn set_input(&mut self, input: ModuleKey) {
+    pub fn set_input(&mut self, input: Option<Rc<dyn SynthModule>>) {
         self.input = input;
     }
 
@@ -71,8 +73,8 @@ impl Mixer {
     }
 }
 
-impl SignalOutputModule for Mixer {
-    fn fill_output_buffer(&mut self, data: &mut [f32], output_info: &OutputInfo, manager: &ModuleManager) {
+impl SynthModule for Mixer {
+    fn fill_output_buffer(&self, data: &mut [f32], output_info: &OutputInfo) {
         let data_len = data.len();
         let input_len = self.inputs.len();
 
@@ -84,9 +86,9 @@ impl SignalOutputModule for Mixer {
         let mut data_buffer = Vec::with_capacity(data_len);
         data_buffer.resize(data_len, 0.0);
         for i in 0..input_len {
-            let input = &mut self.inputs[i];
-            if let Some(mut signal_input) = manager.get(input.input) {
-                signal_input.fill_output_buffer(&mut data_buffer, output_info, manager);
+            let input = &self.inputs[i];
+            if let Some(mut signal_input) = input.input {
+                signal_input.fill_output_buffer(&mut data_buffer, output_info);
             }
             else {
                 continue;

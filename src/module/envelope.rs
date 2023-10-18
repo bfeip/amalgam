@@ -1,4 +1,6 @@
-use super::{common::{SignalOutputModule, OutputInfo}, ModuleKey, NULL_KEY, ModuleManager};
+use std::rc::Rc;
+
+use super::common::{SynthModule, OutputInfo};
 
 #[derive(Debug, Clone, Copy, Hash)]
 enum Adsr {
@@ -20,7 +22,7 @@ pub struct Envelope {
     stage: Adsr,
     previous_value: f32,
 
-    trigger_key: ModuleKey,
+    trigger: Option<Rc<dyn SynthModule>>,
     trigger_tolerance: f32, // Minimum value at which envelope is triggered
     triggered : bool
 }
@@ -35,13 +37,13 @@ impl Envelope {
         let stage = Adsr::Done;
         let previous_value = 0.0;
 
-        let trigger = NULL_KEY;
+        let trigger = None;
         let trigger_tolerance = 0.5;
         let triggered = false;
 
         Self { 
             attack_time, decay_time, sustain_level, release_time,
-            stage, previous_value, trigger_key: trigger, trigger_tolerance, triggered
+            stage, previous_value, trigger, trigger_tolerance, triggered
         }
     }
 
@@ -77,8 +79,8 @@ impl Envelope {
         self.release_time
     }
 
-    pub fn set_trigger(&mut self, trigger: ModuleKey) {
-        self.trigger_key = trigger;
+    pub fn set_trigger(&mut self, trigger: Option<Rc<dyn SynthModule>>) {
+        self.trigger = trigger;
     }
 
     pub fn set_trigger_tolerance(&mut self, trigger_tolerance: f32) {
@@ -171,14 +173,14 @@ impl Envelope {
     }
 }
 
-impl SignalOutputModule for Envelope {
-    fn fill_output_buffer(&mut self, data: &mut [f32], output_info: &OutputInfo, manager: &ModuleManager) {
+impl SynthModule for Envelope {
+    fn fill_output_buffer(&self, data: &mut [f32], output_info: &OutputInfo) {
         let data_size = data.len();
         let mut trigger_data = Vec::with_capacity(data_size);
         trigger_data.resize(data_size, 0.0);
 
-        if let Some(mut trigger) = manager.get(self.trigger_key) {
-            trigger.fill_output_buffer(&mut trigger_data, output_info, manager);
+        if let Some(mut trigger) = self.trigger {
+            trigger.fill_output_buffer(&mut trigger_data, output_info);
         }
         else {
             data.fill(0.0);
@@ -208,7 +210,7 @@ mod tests {
     use crate::clock;
 
     struct ConstantTrigger;
-    impl SignalOutputModule for ConstantTrigger {
+    impl SynthModule for ConstantTrigger {
         fn fill_output_buffer(&mut self, data: &mut [f32], _output_info: &OutputInfo) {
             for datum in data.iter_mut() {
                 *datum = 1.0;
@@ -217,7 +219,7 @@ mod tests {
     }
 
     struct SplitTrigger;
-    impl SignalOutputModule for SplitTrigger {
+    impl SynthModule for SplitTrigger {
         fn fill_output_buffer(&mut self, data: &mut [f32], _output_info: &OutputInfo) {
             let (trigger_data, untrigger_data) = data.split_at_mut(data.len() / 2);
             for datum in trigger_data.iter_mut() {

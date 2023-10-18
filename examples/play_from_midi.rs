@@ -74,7 +74,7 @@ impl EnvelopeTrigger {
     }
 }
 
-impl SignalOutputModule for EnvelopeTrigger {
+impl SynthModule for EnvelopeTrigger {
     fn fill_output_buffer(&mut self, buffer: &mut[f32], _output_info: &OutputInfo) {
         let buffer_len = buffer.len();
         for i in 0..buffer_len {

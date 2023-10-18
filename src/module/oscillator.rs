@@ -1,8 +1,7 @@
+use std::rc::Rc;
+
 use crate::note;
 use crate::clock;
-use super::ModuleKey;
-use super::ModuleManager;
-use super::NULL_KEY;
 use super::common::*;
 
 const PI: f32 = std::f64::consts::PI as f32;
@@ -29,7 +28,7 @@ pub struct Oscillator {
     /// Width of the pulse. Only used for pulse waveforms. 50% is square, 0% and 100% are silent
     pulse_width: f32,
     /// Linear freq modulation input
-    linear_freq_input: ModuleKey,
+    linear_freq_input: Option<Rc<dyn SynthModule>>,
 }
 
 impl Oscillator {
@@ -38,7 +37,7 @@ impl Oscillator {
         let waveform = Waveform::Sine;
         let frequency = note::FREQ_C;
         let pulse_width = 0.5;
-        let linear_freq_input = NULL_KEY;
+        let linear_freq_input = None;
         Oscillator { waveform, frequency, pulse_width, linear_freq_input }
     }
 
@@ -67,7 +66,7 @@ impl Oscillator {
     }
 
     pub fn set_linear_freq_input(
-        &mut self, override_input: ModuleKey
+        &mut self, override_input: Option<Rc<dyn SynthModule>>
     ) {
         self.linear_freq_input = override_input;
     }
@@ -152,14 +151,14 @@ impl Oscillator {
     }
 }
 
-impl SignalOutputModule for Oscillator {
-    fn fill_output_buffer(&mut self, data: &mut [f32], output_info: &OutputInfo, manager: &ModuleManager) {
+impl SynthModule for Oscillator {
+    fn fill_output_buffer(&self, data: &mut [f32], output_info: &OutputInfo) {
         let buffer_len = data.len();
 
         // Get freq override input
         let mut linear_freq_input_buffer = vec![0.0; buffer_len];
-        if let Some(mut freq_override_module) = manager.get(self.linear_freq_input) {
-            freq_override_module.fill_output_buffer(linear_freq_input_buffer.as_mut_slice(), output_info, manager);
+        if let Some(linear_freq_input) = self.linear_freq_input {
+            linear_freq_input.fill_output_buffer(linear_freq_input_buffer.as_mut_slice(), output_info);
         };
 
         self.fill(data, &output_info.current_sample_range, &linear_freq_input_buffer);

@@ -1,29 +1,30 @@
-use super::common::{SignalOutputModule, OutputInfo};
-use super::{ModuleKey, ModuleManager, NULL_KEY};
+use std::rc::Rc;
+
+use super::common::{SynthModule, OutputInfo};
 
 #[derive(Clone)]
 pub struct Attenuverter {
-    signal_in_key: ModuleKey,
-    control_in_key: ModuleKey,
+    signal_in: Option<Rc<dyn SynthModule>>,
+    control_in: Option<Rc<dyn SynthModule>>,
     gain: f32,
     control_gain: f32,
 }
 
 impl Attenuverter {
     pub fn new() -> Self {
-        let signal_in = NULL_KEY;
-        let control_in = NULL_KEY;
+        let signal_in = None;
+        let control_in = None;
         let gain = 0_f32;
         let control_gain = 1_f32;
-        Self { signal_in_key: signal_in, control_in_key: control_in, gain, control_gain }
+        Self { signal_in, control_in, gain, control_gain }
     }
 
-    pub fn set_signal_in(&mut self, signal_in: ModuleKey) {
-        self.signal_in_key = signal_in;
+    pub fn set_signal_in(&mut self, signal_in: Option<Rc<dyn SynthModule>>) {
+        self.signal_in = signal_in;
     }
 
-    pub fn set_control_in(&mut self, control_in: ModuleKey) {
-        self.control_in_key = control_in;
+    pub fn set_control_in(&mut self, control_in: Option<Rc<dyn SynthModule>>) {
+        self.control_in = control_in;
     }
 
     pub fn set_gain(&mut self, gain: f32) {
@@ -41,20 +42,20 @@ impl Attenuverter {
     }
 }
 
-impl SignalOutputModule for Attenuverter {
-    fn fill_output_buffer(&mut self, buffer: &mut [f32], output_info: &OutputInfo, manager: &ModuleManager) {
+impl SynthModule for Attenuverter {
+    fn fill_output_buffer(&self, buffer: &mut [f32], output_info: &OutputInfo) {
         let buffer_len = buffer.len();
 
         // Get raw, unattenuated signal
         let mut raw_signal = vec![0.0; buffer_len];
-        if let Some(mut signal_in) = manager.get(self.signal_in_key) {
-            signal_in.fill_output_buffer(&mut raw_signal, output_info, manager);   
+        if let Some(signal_in) = self.signal_in {
+            signal_in.fill_output_buffer(&mut raw_signal, output_info);   
         }
 
         // Get control signal
         let mut control = vec![0.0; buffer_len];
-        if let Some(mut control_in) = manager.get(self.control_in_key) {
-            control_in.fill_output_buffer(&mut control, output_info, manager);   
+        if let Some(control_in) = self.control_in {
+            control_in.fill_output_buffer(&mut control, output_info);   
         }
 
         for i in 0..buffer_len {
@@ -74,7 +75,7 @@ mod tests {
 
     const SAMPLE_RATE: usize = 10;
 
-    fn get_constant_signal(amplitude: f32) -> Connectable<dyn SignalOutputModule> {
+    fn get_constant_signal(amplitude: f32) -> Connectable<dyn SynthModule> {
         let samples = vec![amplitude; SAMPLE_RATE];
         let sample_buffer = SampleBuffer::new(samples);
         sample_buffer.into()

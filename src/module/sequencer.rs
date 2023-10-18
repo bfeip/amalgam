@@ -1,5 +1,7 @@
-use super::common::{SignalOutputModule, OutputInfo, EdgeDetection};
-use super::{error::*, ModuleKey, NULL_KEY, ModuleManager};
+use std::rc::Rc;
+
+use super::common::{SynthModule, OutputInfo, EdgeDetection};
+use super::error::*;
 
 const DEFAULT_STEP_INFO: StepInfo = StepInfo {
     kind: SequencerStepKind::Normal,
@@ -28,7 +30,7 @@ pub struct Sequencer {
     cycle: bool,
     current_step: usize,
 
-    clock: ModuleKey,
+    clock: Option<Rc<dyn SynthModule>>,
     edge_detection: EdgeDetection,
     edge_tolerance: f32
 }
@@ -40,7 +42,7 @@ impl Sequencer {
         let cycle = true;
         let current_step = 0_usize;
 
-        let clock = NULL_KEY;
+        let clock = None;
         let edge_detection = EdgeDetection::Falling;
         let edge_tolerance = 0.8_f32;
         Self { steps, playing, cycle, current_step, clock, edge_detection, edge_tolerance }
@@ -56,7 +58,7 @@ impl Sequencer {
         let cycle = true;
         let current_step = 0_usize;
 
-        let clock = NULL_KEY;
+        let clock = None;
         let edge_detection = EdgeDetection::Falling;
         let edge_tolerance = 0.8_f32;
         Self { steps, playing, cycle, current_step, clock, edge_detection, edge_tolerance }
@@ -166,7 +168,7 @@ impl Sequencer {
         self.playing = false;
     }
 
-    pub fn set_clock(&mut self, clock: ModuleKey) {
+    pub fn set_clock(&mut self, clock: Option<Rc<dyn SynthModule>>) {
         self.clock = clock;
     }
 
@@ -203,8 +205,8 @@ impl Sequencer {
     }
 }
 
-impl SignalOutputModule for Sequencer {
-    fn fill_output_buffer(&mut self, data: &mut [f32], output_info: &OutputInfo, manager: &ModuleManager) {
+impl SynthModule for Sequencer {
+    fn fill_output_buffer(&self, data: &mut [f32], output_info: &OutputInfo) {
         let data_size = data.len();
 
         // Closure to fill the actual data buffer
@@ -229,8 +231,8 @@ impl SignalOutputModule for Sequencer {
             // We are playing which means which step we are on is subject to change
             let mut clock_signals = Vec::with_capacity(data_size);
             clock_signals.resize(data_size, 0_f32);
-            if let Some(mut clock) = manager.get(self.clock) {
-                clock.fill_output_buffer(&mut clock_signals, output_info, manager);
+            if let Some(clock) = self.clock {
+                clock.fill_output_buffer(&mut clock_signals, output_info);
             }
 
             let mut data_filled = 0_usize;

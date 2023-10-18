@@ -2,7 +2,7 @@ use crate::module::ModuleManager;
 
 use super::error::{SynthResult, SynthError};
 use super::module::Output;
-use super::module::common::{SignalOutputModule, OutputInfo, OutputTimestamp};
+use super::module::common::{SynthModule, OutputInfo, OutputTimestamp};
 use super::output::AudioInterface;
 use super::clock;
 use super::SignalLogger;
