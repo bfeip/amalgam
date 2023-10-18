@@ -172,12 +172,12 @@ impl Envelope {
 }
 
 impl SignalOutputModule for Envelope {
-    fn fill_output_buffer(&mut self, data: &mut [f32], output_info: &OutputInfo, manager: &mut ModuleManager) {
+    fn fill_output_buffer(&mut self, data: &mut [f32], output_info: &OutputInfo, manager: &ModuleManager) {
         let data_size = data.len();
         let mut trigger_data = Vec::with_capacity(data_size);
         trigger_data.resize(data_size, 0.0);
 
-        if let Some(trigger) = manager.get_mut(self.trigger_key) {
+        if let Some(mut trigger) = manager.get(self.trigger_key) {
             trigger.fill_output_buffer(&mut trigger_data, output_info, manager);
         }
         else {

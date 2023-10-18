@@ -42,18 +42,18 @@ impl Attenuverter {
 }
 
 impl SignalOutputModule for Attenuverter {
-    fn fill_output_buffer(&mut self, buffer: &mut [f32], output_info: &OutputInfo, manager: &mut ModuleManager) {
+    fn fill_output_buffer(&mut self, buffer: &mut [f32], output_info: &OutputInfo, manager: &ModuleManager) {
         let buffer_len = buffer.len();
 
         // Get raw, unattenuated signal
         let mut raw_signal = vec![0.0; buffer_len];
-        if let Some(signal_in) = manager.get_mut(self.signal_in_key) {
+        if let Some(mut signal_in) = manager.get(self.signal_in_key) {
             signal_in.fill_output_buffer(&mut raw_signal, output_info, manager);   
         }
 
         // Get control signal
         let mut control = vec![0.0; buffer_len];
-        if let Some(control_in) = manager.get_mut(self.control_in_key) {
+        if let Some(mut control_in) = manager.get(self.control_in_key) {
             control_in.fill_output_buffer(&mut control, output_info, manager);   
         }
 

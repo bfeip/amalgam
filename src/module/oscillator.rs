@@ -153,12 +153,12 @@ impl Oscillator {
 }
 
 impl SignalOutputModule for Oscillator {
-    fn fill_output_buffer(&mut self, data: &mut [f32], output_info: &OutputInfo, manager: &mut ModuleManager) {
+    fn fill_output_buffer(&mut self, data: &mut [f32], output_info: &OutputInfo, manager: &ModuleManager) {
         let buffer_len = data.len();
 
         // Get freq override input
         let mut linear_freq_input_buffer = vec![0.0; buffer_len];
-        if let Some(freq_override_module) = manager.get_mut(self.linear_freq_input) {
+        if let Some(mut freq_override_module) = manager.get(self.linear_freq_input) {
             freq_override_module.fill_output_buffer(linear_freq_input_buffer.as_mut_slice(), output_info, manager);
         };
 

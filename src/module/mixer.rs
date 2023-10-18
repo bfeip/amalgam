@@ -72,7 +72,7 @@ impl Mixer {
 }
 
 impl SignalOutputModule for Mixer {
-    fn fill_output_buffer(&mut self, data: &mut [f32], output_info: &OutputInfo, manager: &mut ModuleManager) {
+    fn fill_output_buffer(&mut self, data: &mut [f32], output_info: &OutputInfo, manager: &ModuleManager) {
         let data_len = data.len();
         let input_len = self.inputs.len();
 
@@ -85,7 +85,7 @@ impl SignalOutputModule for Mixer {
         data_buffer.resize(data_len, 0.0);
         for i in 0..input_len {
             let input = &mut self.inputs[i];
-            if let Some(signal_input) = manager.get_mut(input.input) {
+            if let Some(mut signal_input) = manager.get(input.input) {
                 signal_input.fill_output_buffer(&mut data_buffer, output_info, manager);
             }
             else {

@@ -19,7 +19,7 @@ impl NoiseGenerator {
 }
 
 impl SignalOutputModule for NoiseGenerator {
-    fn fill_output_buffer(&mut self, data: &mut [f32], _output_info: &OutputInfo, _manager: &mut ModuleManager) {
+    fn fill_output_buffer(&mut self, data: &mut [f32], _output_info: &OutputInfo, _manager: &ModuleManager) {
         for datum in data.iter_mut() {
             *datum = self.get();
         }

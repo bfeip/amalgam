@@ -204,7 +204,7 @@ impl Sequencer {
 }
 
 impl SignalOutputModule for Sequencer {
-    fn fill_output_buffer(&mut self, data: &mut [f32], output_info: &OutputInfo, manager: &mut ModuleManager) {
+    fn fill_output_buffer(&mut self, data: &mut [f32], output_info: &OutputInfo, manager: &ModuleManager) {
         let data_size = data.len();
 
         // Closure to fill the actual data buffer
@@ -229,7 +229,7 @@ impl SignalOutputModule for Sequencer {
             // We are playing which means which step we are on is subject to change
             let mut clock_signals = Vec::with_capacity(data_size);
             clock_signals.resize(data_size, 0_f32);
-            if let Some(clock) = manager.get_mut(self.clock) {
+            if let Some(mut clock) = manager.get(self.clock) {
                 clock.fill_output_buffer(&mut clock_signals, output_info, manager);
             }
 

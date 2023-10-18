@@ -32,12 +32,12 @@ impl Compressor {
 }
 
 impl SignalOutputModule for Compressor {
-    fn fill_output_buffer(&mut self, buffer: &mut [f32], output_info: &OutputInfo, manager: &mut ModuleManager) {
+    fn fill_output_buffer(&mut self, buffer: &mut [f32], output_info: &OutputInfo, manager: &ModuleManager) {
         let buffer_len = buffer.len();
 
         // Get signal from input
         let mut signal = vec![0.0; buffer_len];
-        if let Some(signal_in) = manager.get_mut(self.signal_in_key) {
+        if let Some(mut signal_in) = manager.get(self.signal_in_key) {
             signal_in.fill_output_buffer(&mut signal, output_info, manager)
         }
         else {

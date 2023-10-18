@@ -31,7 +31,7 @@ impl Output {
 }
 
 impl SignalOutputModule for Output {
-    fn fill_output_buffer(&mut self, data: &mut [f32], output_info: &OutputInfo, manager: &mut ModuleManager) {
+    fn fill_output_buffer(&mut self, data: &mut [f32], output_info: &OutputInfo, manager: &ModuleManager) {
         let channel_count_usize = output_info.channel_count as usize;
         let total_buffer_len = data.len();
         debug_assert!(
@@ -44,7 +44,7 @@ impl SignalOutputModule for Output {
         let mut mono_channel_buffer = vec![0.0; mono_channel_len];
 
         // Get the audio for the one channel
-        if let Some(audio_input) = manager.get_mut(self.audio_input) {
+        if let Some(mut audio_input) = manager.get(self.audio_input) {
             audio_input.fill_output_buffer(&mut mono_channel_buffer, output_info, manager);
         };
 

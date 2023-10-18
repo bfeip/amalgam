@@ -25,6 +25,7 @@ pub use midi::MidiModuleBase;
 pub use output::Output;
 
 use std::collections::HashMap;
+use std::sync::{Mutex, MutexGuard};
 
 use self::common::SignalOutputModule;
 
@@ -37,13 +38,13 @@ enum Module {
 }
 
 impl SignalOutputModule for Module {
-    fn fill_output_buffer(&mut self, _buffer: &mut [f32], _output_info: &common::OutputInfo, _manager: &mut ModuleManager) {
+    fn fill_output_buffer(&mut self, _buffer: &mut [f32], _output_info: &common::OutputInfo, _manager: &ModuleManager) {
         todo!();
     }
 }
 
 pub struct ModuleManager {
-    modules: HashMap<ModuleKey, Module>,
+    modules: HashMap<ModuleKey, Mutex<Module>>,
     next_key: ModuleKey
 }
 
@@ -56,21 +57,18 @@ impl ModuleManager {
     }
 
     pub fn add(&mut self, module: Module) -> ModuleKey {
-        self.modules.insert(self.next_key, module);
+        let mutexed_module = Mutex::new(module);
+        self.modules.insert(self.next_key, mutexed_module);
         let ret = self.next_key;
         self.next_key += 1;
         ret
     }
 
-    pub fn get(&self, key: ModuleKey) -> Option<&Module> {
-        self.modules.get(&key)
-    }
-
-    pub fn get_mut(&mut self, key: ModuleKey) -> Option<&mut Module> {
-        self.modules.get_mut(&key)
+    pub fn get(&self, key: ModuleKey) -> Option<MutexGuard<Module>> {
+        self.modules.get(&key).map(|m| m.lock().expect("Module lock poisoned"))
     }
 
     pub fn remove(&mut self, key: ModuleKey) -> Option<Module> {
-        self.modules.remove(&key)
+        self.modules.remove(&key).map(|m| m.into_inner().expect("Module lock poisoned"))
     }
 }

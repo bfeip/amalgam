@@ -111,7 +111,7 @@ impl Synth {
 
             #[cfg(feature = "audio_printing")]
             let computation_started = time::Instant::now();
-            locked_synth.output_module.fill_output_buffer(&mut f32_buffer, &output_info, &mut locked_synth.module_manager);
+            locked_synth.output_module.fill_output_buffer(&mut f32_buffer, &output_info, &locked_synth.module_manager);
             for i in 0..buffer_length {
                 sample_buffer[i] = T::from(&f32_buffer[i]);
             }
