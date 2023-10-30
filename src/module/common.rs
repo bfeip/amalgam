@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use crate::note::NoteInterval;
 use crate::clock::SampleRange;
 
@@ -76,13 +78,13 @@ pub struct OutputInfo {
     pub sample_rate: usize,
     pub channel_count: u16,
     pub current_sample_range: SampleRange,
-    pub timestamp: OutputTimestamp
+    pub timestamp: Instant
 }
 
 impl OutputInfo {
     pub fn new(
         sample_rate: usize, channel_count: u16,
-        current_sample_range: SampleRange, timestamp: OutputTimestamp
+        current_sample_range: SampleRange, timestamp: Instant
     ) -> Self {
         OutputInfo { sample_rate, channel_count, current_sample_range, timestamp }
     }
@@ -90,7 +92,7 @@ impl OutputInfo {
     #[cfg(test)]
     pub fn new_basic(sample_rate: usize, current_sample_range: SampleRange) -> Self {
         let channel_count = 1;
-        let timestamp = OutputTimestamp::empty();
+        let timestamp = Instant::now();
         OutputInfo { sample_rate, channel_count, current_sample_range, timestamp }
     }
 }
