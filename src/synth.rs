@@ -58,7 +58,7 @@ impl Synth {
         &mut self.output_module
     }
 
-    fn init_cpal_callback<T: cpal::Sample>(&mut self) {
+    fn init_cpal_callback<T: cpal::Sample>(&mut self) -> SynthResult<()> {
         let audio_queue = self.audio_queue.clone();
         let callback = move |audio: &mut [T], _callback_info: &cpal::OutputCallbackInfo| {
             if let Ok(mut audio_queue) = audio_queue.lock() {
@@ -82,19 +82,20 @@ impl Synth {
             }
         };
 
-        self.audio_interface.set_stream_callback(callback);
+        self.audio_interface.set_stream_callback(callback)?;
+        Ok(())
     }
 
     pub fn play(&mut self) -> SynthResult<()> {
         match self.audio_interface.get_sample_format() {
-            cpal::SampleFormat::I16 => self.init_cpal_callback::<i16>(),
-            cpal::SampleFormat::U16 => self.init_cpal_callback::<u16>(),
-            cpal::SampleFormat::F32 => self.init_cpal_callback::<f32>(),
+            cpal::SampleFormat::I16 => self.init_cpal_callback::<i16>()?,
+            cpal::SampleFormat::U16 => self.init_cpal_callback::<u16>()?,
+            cpal::SampleFormat::F32 => self.init_cpal_callback::<f32>()?,
         };
         self.audio_interface.play()
     }
 
-    pub fn gen_samples(&self) -> SynthResult<()> {
+    pub fn gen_samples(&mut self) -> SynthResult<()> {
         if !self.audio_interface.is_playing() {
             let msg = "Cannot generate samples while not playing";
             return Err(SynthError::new(msg));
