@@ -1,4 +1,5 @@
 use std::rc::Rc;
+use std::cell::Cell;
 
 use super::common::*;
 
@@ -7,7 +8,7 @@ const MICROSECONDS_PER_SECOND: f32 = 1_000_000.0;
 pub struct Compressor {
     signal_in: Option<Rc<dyn SynthModule>>,
     slew_time: f32, // microseconds
-    compression_factor: f32,
+    compression_factor: Cell<f32>,
     over_compression: f32, // A boost to the initial compression factor
 }
 
@@ -15,7 +16,7 @@ impl Compressor {
     pub fn new() -> Self {
         let signal_in = None;
         let slew_time = MICROSECONDS_PER_SECOND;
-        let compression_factor = 1.0;
+        let compression_factor = Cell::new(1.0);
         let over_compression = 0.1;
         Compressor { signal_in, slew_time, compression_factor, over_compression }
     }
@@ -39,7 +40,7 @@ impl SynthModule for Compressor {
 
         // Get signal from input
         let mut signal = vec![0.0; buffer_len];
-        if let Some(signal_in) = self.signal_in {
+        if let Some(signal_in) = &self.signal_in {
             signal_in.fill_output_buffer(&mut signal, output_info)
         }
         else {
@@ -47,7 +48,7 @@ impl SynthModule for Compressor {
             return;
         }
 
-        let mut compression_factor = self.compression_factor;
+        let mut compression_factor = self.compression_factor.get();
         for i in 0..buffer_len {
             if signal[i] < 1.0 {
                 // Set a new compression factor if we need to
@@ -61,6 +62,6 @@ impl SynthModule for Compressor {
             }
             buffer[i] = signal[i] / compression_factor
         }
-        self.compression_factor = compression_factor;
+        self.compression_factor.set(compression_factor);
     }
 }

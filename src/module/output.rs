@@ -46,7 +46,7 @@ impl SynthModule for Output {
         let mut mono_channel_buffer = vec![0.0; mono_channel_len];
 
         // Get the audio for the one channel
-        if let Some(audio_input) = self.audio_input {
+        if let Some(audio_input) = &self.audio_input {
             audio_input.fill_output_buffer(&mut mono_channel_buffer, output_info);
         };
 

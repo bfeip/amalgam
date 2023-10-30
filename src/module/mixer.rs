@@ -87,7 +87,7 @@ impl SynthModule for Mixer {
         data_buffer.resize(data_len, 0.0);
         for i in 0..input_len {
             let input = &self.inputs[i];
-            if let Some(mut signal_input) = input.input {
+            if let Some(signal_input) = &input.input {
                 signal_input.fill_output_buffer(&mut data_buffer, output_info);
             }
             else {

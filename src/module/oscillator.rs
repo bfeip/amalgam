@@ -157,7 +157,7 @@ impl SynthModule for Oscillator {
 
         // Get freq override input
         let mut linear_freq_input_buffer = vec![0.0; buffer_len];
-        if let Some(linear_freq_input) = self.linear_freq_input {
+        if let Some(linear_freq_input) = &self.linear_freq_input {
             linear_freq_input.fill_output_buffer(linear_freq_input_buffer.as_mut_slice(), output_info);
         };
 

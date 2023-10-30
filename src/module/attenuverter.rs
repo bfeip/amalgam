@@ -48,13 +48,13 @@ impl SynthModule for Attenuverter {
 
         // Get raw, unattenuated signal
         let mut raw_signal = vec![0.0; buffer_len];
-        if let Some(signal_in) = self.signal_in {
+        if let Some(signal_in) = &self.signal_in {
             signal_in.fill_output_buffer(&mut raw_signal, output_info);   
         }
 
         // Get control signal
         let mut control = vec![0.0; buffer_len];
-        if let Some(control_in) = self.control_in {
+        if let Some(control_in) = &self.control_in {
             control_in.fill_output_buffer(&mut control, output_info);   
         }
 
