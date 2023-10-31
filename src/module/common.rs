@@ -1,7 +1,7 @@
+use std::time::Instant;
+
 use crate::note::NoteInterval;
 use crate::clock::SampleRange;
-
-use super::ModuleManager;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum EdgeDetection {
@@ -78,13 +78,13 @@ pub struct OutputInfo {
     pub sample_rate: usize,
     pub channel_count: u16,
     pub current_sample_range: SampleRange,
-    pub timestamp: OutputTimestamp
+    pub timestamp: Instant
 }
 
 impl OutputInfo {
     pub fn new(
         sample_rate: usize, channel_count: u16,
-        current_sample_range: SampleRange, timestamp: OutputTimestamp
+        current_sample_range: SampleRange, timestamp: Instant
     ) -> Self {
         OutputInfo { sample_rate, channel_count, current_sample_range, timestamp }
     }
@@ -92,30 +92,15 @@ impl OutputInfo {
     #[cfg(test)]
     pub fn new_basic(sample_rate: usize, current_sample_range: SampleRange) -> Self {
         let channel_count = 1;
-        let timestamp = OutputTimestamp::empty();
+        let timestamp = Instant::now();
         OutputInfo { sample_rate, channel_count, current_sample_range, timestamp }
     }
 }
 
 /// Trait for modules that output a signal of some kind, audio or control
-pub trait SignalOutputModule: Send {
+pub trait SynthModule {
     /// Fills a provided buffer with the signal output
-    fn fill_output_buffer(&mut self, buffer: &mut [f32], output_info: &OutputInfo, manager: &ModuleManager);
-}
-
-pub trait OptionalSignalOutputModule: Send {
-    fn fill_optional_output_buffer(&mut self, buffer: &mut[Option<f32>], output_info: &OutputInfo, manager: &mut ModuleManager);
-}
-
-impl<T: SignalOutputModule> OptionalSignalOutputModule for T {
-    fn fill_optional_output_buffer(&mut self, buffer: &mut[Option<f32>], output_info: &OutputInfo, manager: &mut ModuleManager) {
-        let buffer_len = buffer.len();
-        let mut sample_buffer = vec![0.0; buffer_len];
-        self.fill_output_buffer(sample_buffer.as_mut_slice(), output_info, manager);
-        for (&raw_sample, sample_option) in sample_buffer.iter().zip(buffer.iter_mut()) {
-            *sample_option = Some(raw_sample);
-        }
-    }
+    fn fill_output_buffer(&self, buffer: &mut [f32], output_info: &OutputInfo);
 }
 
 pub trait NoteOutputModule: Send {

@@ -4,6 +4,9 @@ use cpal::traits::HostTrait;
 use cpal::traits::DeviceTrait;
 use cpal::traits::StreamTrait;
 
+use crate::SynthError;
+use crate::SynthResult;
+
 /// Structure representing a stream to Cpal. Houses all the info required to output audio
 pub struct AudioInterface {
     host: cpal::Host,
@@ -16,24 +19,24 @@ pub struct AudioInterface {
 /// Structure containing a bunch of info about a `AudioInterface`. Mostly for debugging
 #[derive(Debug)]
 pub struct CpalInfo {
-    device_name: String,
-    sample_rate: u32,
-    sample_format: cpal::SampleFormat,
-    channels: u16,
-    buffer_size: cpal::SupportedBufferSize,
-    playing: bool
+    pub device_name: String,
+    pub sample_rate: u32,
+    pub sample_format: cpal::SampleFormat,
+    pub channels: u16,
+    pub buffer_size: cpal::SupportedBufferSize,
+    pub playing: bool
 }
 
 impl AudioInterface {
     /// Creates a new `AudioInterface` with default settings. Device and config info are provided by the system.
     /// The default stream callback does nothing so playing this in the default state will do nothing. A stream callback
     /// has to be set before we can output anything interesting.
-    pub fn new() -> AudioOutputResult<Self> {
+    pub fn new() -> SynthResult<Self> {
         // Setup the host and device
         let host = cpal::default_host();
         let device = match host.default_output_device() {
             Some(device) => device,
-            None => return Err(AudioOutputError::new("No output devices detected"))
+            None => return Err(SynthError::new("No output devices detected"))
         };
 
         // Get list of supported output configs
@@ -43,11 +46,11 @@ impl AudioInterface {
                 let device_name = device.name();
                 if device_name.is_err() {
                     let msg = format!("Not only could we not query the configs for this device. We also couldn't get the device name: {}", err); 
-                    return Err(AudioOutputError::new(&msg));
+                    return Err(SynthError::new(&msg));
                 }
                 let device_name = device_name.unwrap(); // shadow
                 let msg = format!("Could not query configs for device {}: {}", device_name, err);
-                return Err(AudioOutputError::new(&msg));
+                return Err(SynthError::new(&msg));
             }
         };
 
@@ -58,33 +61,16 @@ impl AudioInterface {
                 let device_name = device.name();
                 if device_name.is_err() {
                     let msg = format!("Not only could we not get a supported config. We also couldn't get the device name"); 
-                    return Err(AudioOutputError::new(&msg));
+                    return Err(SynthError::new(&msg));
                 }
                 let device_name = device_name.unwrap(); // shadow
                 let msg = format!("No supported configuration for {}", device_name);
-                return Err(AudioOutputError::new(&msg));
+                return Err(SynthError::new(&msg));
             }
         };
 
         let min_sample_rate = supported_config.min_sample_rate();
         let max_sample_rate = supported_config.max_sample_rate();
-
-        // Print configuration details to console if requested
-        #[cfg(feature = "audio_printing")]
-        {
-            let device_name = device.name();
-            if device_name.is_err() {
-                let msg = format!("Not only could we not get a supported config. We also couldn't get the device name"); 
-                return Err(AudioOutputError::new(&msg));
-            }
-            let device_name = device_name.unwrap(); // shadow
-            let sample_format = supported_config.sample_format();
-            
-            println!(
-                "Device name: {}\nSample format: {:#?}\nMin sample rate: {:#?}\nMax sample rate: {:#?}",
-                device_name, sample_format, min_sample_rate, max_sample_rate
-            );
-        }
 
         // Find a good sample rate. There are a few good rates we'll check for. If we can't get those
         // we'll just go for the max.
@@ -119,7 +105,7 @@ impl AudioInterface {
             Ok(stream) => stream,
             Err(err) => {
                 let msg = format!("Failed to create a cpal output stream: {}", err);
-                return Err(AudioOutputError::new(&msg));
+                return Err(SynthError::new(&msg));
             }
         };
 
@@ -148,14 +134,14 @@ impl AudioInterface {
     pub fn set_stream_callback<
         T: cpal::Sample,
         D: FnMut(&mut [T], &cpal::OutputCallbackInfo) + Send + 'static
-    > (&mut self, sample_output: D) -> AudioOutputResult<()> {
+    > (&mut self, sample_output: D) -> SynthResult<()> {
         let stream_result = self.device.build_output_stream(&self.current_config.config(), sample_output, print_error_callback);
 
         let stream = match stream_result {
             Ok(stream) => stream,
             Err(err) => {
                 let msg = format!("Failed to create a cpal output stream: {}", err);
-                return Err(AudioOutputError::new(&msg));
+                return Err(SynthError::new(&msg));
             }
         };
 
@@ -165,13 +151,17 @@ impl AudioInterface {
     }
 
     /// Starts playing the audio stream
-    pub fn play(&mut self) -> AudioOutputResult<()> {
+    pub fn play(&mut self) -> SynthResult<()> {
         if let Err(err) = self.stream.play() {
             let msg = format!("Failed to begin stream playback: {}", err);
-            return Err(AudioOutputError::new(&msg));
+            return Err(SynthError::new(&msg));
         }
         self.playing = true;
         Ok(())
+    }
+
+    pub fn is_playing(&self) -> bool {
+        return self.playing;
     }
 
     /// Gets a bunch of info about this struct and puts it into an easily printable `CpalInfo`
@@ -213,26 +203,3 @@ fn null_error_callback(_err: cpal::StreamError) {
 fn print_error_callback(err: cpal::StreamError) {
     println!("CPAL ERROR: {}", err)
 }
-
-/// The error type used for audio output issues
-#[derive(Debug)]
-pub struct AudioOutputError {
-    msg: String
-}
-
-impl AudioOutputError {
-    pub fn new(msg: &str) -> Self {
-        let msg = msg.to_string();
-        AudioOutputError { msg }
-    }
-}
-
-impl std::fmt::Display for AudioOutputError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.msg)
-    } 
-}
-
-impl std::error::Error for AudioOutputError {}
-
-pub type AudioOutputResult<T> = Result<T, AudioOutputError>;

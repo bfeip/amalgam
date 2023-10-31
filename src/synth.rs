@@ -1,38 +1,53 @@
-use crate::module::ModuleManager;
+use cpal::SupportedBufferSize;
+use crate::module::common::{SynthModule, OutputInfo};
 
 use super::error::{SynthResult, SynthError};
 use super::module::Output;
-use super::module::common::{SignalOutputModule, OutputInfo, OutputTimestamp};
 use super::output::AudioInterface;
 use super::clock;
 use super::SignalLogger;
 
-#[cfg(feature = "audio_printing")]
-use std::time;
-
 use std::sync::{Arc, Mutex};
 
 pub struct Synth {
+    audio_interface: AudioInterface,
     output_module: Output,
     sample_rate: usize,
     master_sample_clock: clock::SampleClock,
     signal_logger: SignalLogger,
-    module_manager: ModuleManager
+    audio_queue: Arc<Mutex<Vec<f32>>>
 }
 
 impl Synth {
     pub fn new() -> SynthResult<Self> {
+        let audio_interface = match AudioInterface::new() {
+            Ok(audio_interface) => audio_interface,
+            Err(error) => {
+                let msg = format!("Failed to create audio interface: {}", error);
+                return Err(SynthError::new(&msg));
+            }
+        };
+
+        let sample_rate = audio_interface.get_sample_rate().0 as usize;
+
         let output_module = Output::new();
-        let master_sample_clock = clock::SampleClock::new(0);
-        let sample_rate = 0;
+        let master_sample_clock = clock::SampleClock::new(sample_rate);
 
         #[cfg(feature = "signal_logging")]
         let signal_logger = SignalLogger::new("final_signal.txt");
         #[cfg(not(feature = "signal_logging"))]
         let signal_logger = SignalLogger::new_sink();
-        let module_manager = ModuleManager::new();
 
-        let synth = Synth { output_module, sample_rate, master_sample_clock, signal_logger, module_manager };
+        let audio_queue = Arc::new(Mutex::new(Vec::new()));
+
+        let synth = Synth {
+            audio_interface,
+            output_module,
+            sample_rate,
+            master_sample_clock,
+            signal_logger,
+            audio_queue
+        };
         Ok(synth)
     }
 
@@ -44,118 +59,79 @@ impl Synth {
         &mut self.output_module
     }
 
-    pub fn play(synth: Arc<Mutex<Self>>, audio_interface: &mut AudioInterface) -> SynthResult<()> {
-        let sample_type = audio_interface.get_sample_format();
-
-        // Get and store the sample rate
-        let new_sample_rate = audio_interface.get_sample_rate().0 as usize;
-
-        // Mutex block so that synth is unlocked at the end of this block
-        {
-            // Lock synth mutex and so we can start doing things with it
-            let mut locked_synth = match synth.lock() {
-                Ok(locked_synth) => locked_synth,
-                Err(err) => {
-                    let msg = format!("Can't play. Synth lock is poisoned!: {}", err);
-                    return Err(SynthError::new(&msg));
-                }
-            };
-
-            let sample_rate_has_changed = locked_synth.sample_rate != new_sample_rate;
-            locked_synth.sample_rate = new_sample_rate;
-
-            // If the clock has not yet been initialized or it's invalid because the sample rate has changed
-            // set up a new clock
-            if sample_rate_has_changed {
-                let clock = clock::SampleClock::new(new_sample_rate);
-                locked_synth.master_sample_clock = clock;
-            }
-        }
-
-        match sample_type {
-            cpal::SampleFormat::F32 => Self::play_with_cpal::<f32>(synth, audio_interface),
-            cpal::SampleFormat::I16 => Self::play_with_cpal::<i16>(synth, audio_interface),
-            cpal::SampleFormat::U16 => Self::play_with_cpal::<u16>(synth, audio_interface)
-        }
-    }
-
-    fn play_with_cpal<T: cpal::Sample>(synth: Arc<Mutex<Self>>, audio_interface: &mut AudioInterface) -> SynthResult<()> {
-        let channel_count = audio_interface.get_channel_count();
-
-        // Create a callback to pass to CPAL to output the audio. This'll get passed to a different thread that
-        // will actually play the audio.
-        let output_callback = move |sample_buffer: &mut [T], callback_info: &cpal::OutputCallbackInfo| {
-            // Lock synth mutex and so we can start doing things with it
-            let mut locked_synth = match synth.lock() {
-                Ok(locked_synth) => locked_synth,
-                Err(err) => {
-                    // We're in trouble here. Since this is on the audio output thread all I can really do
-                    // is panic and hope CPAL handles it more gracefully than just blowing up
-                    panic!("Failed in audio output. Synth lock is poisoned!: {}", err);
-                }
-            };
-
-            let buffer_length = sample_buffer.len();
-            let mut f32_buffer = Vec::with_capacity(buffer_length);
-            for _ in 0..buffer_length {
-                f32_buffer.push(0_f32);
-            }
-
-            let timestamp = OutputTimestamp::new(callback_info.timestamp());
-
-            let clock_values_len = buffer_length / channel_count as usize;
-            let mut sample_clock = locked_synth.master_sample_clock;
-            let sample_range = sample_clock.get_range(clock_values_len);
-            locked_synth.master_sample_clock = sample_clock;
-            let output_info = OutputInfo::new(locked_synth.sample_rate, channel_count, sample_range, timestamp);
-
-            #[cfg(feature = "audio_printing")]
-            let computation_started = time::Instant::now();
-            locked_synth.output_module.fill_output_buffer(&mut f32_buffer, &output_info, &locked_synth.module_manager);
-            for i in 0..buffer_length {
-                sample_buffer[i] = T::from(&f32_buffer[i]);
-            }
-            #[cfg(feature = "audio_printing")]
-            let computation_ended = time::Instant::now();
-
-            if let Err(err) = locked_synth.signal_logger.log("final".to_owned(), &f32_buffer) {
-                panic!("Failed to write signal log: {}", err);
-            }
-
-            #[cfg(feature = "audio_printing")]
-            {
-                let computation_duration = computation_ended - computation_started;
-                let audio_duration = callback_info.timestamp().playback.duration_since(
-                    &callback_info.timestamp().callback
-                ).unwrap();
-                
-                let mut max_sample_diff = 0_f32;
-                for sample_pair in f32_buffer.windows(2) {
-                    let sample_diff = (sample_pair[0] - sample_pair[1]).abs();
-                    max_sample_diff = max_sample_diff.max(sample_diff);
+    fn init_cpal_callback<T: cpal::Sample>(&mut self) -> SynthResult<()> {
+        let audio_queue = self.audio_queue.clone();
+        let callback = move |audio: &mut [T], _callback_info: &cpal::OutputCallbackInfo| {
+            if let Ok(mut audio_queue) = audio_queue.lock() {
+                if audio_queue.len() < audio.len() {
+                    // We do not have enough audio to play. I think we just play nothing
+                    audio.fill(T::from(&0_i16));
+                    return;
                 }
 
-                println!(
-                    concat!(
-                        "{{",
-                        "\tComputation duration: {:#?}\n",
-                        "\tAudio duration: {:#?}\n",
-                        "\tMax sample diff: {}\n",
-                        "}}"
-                    ),
-                    computation_duration, audio_duration, max_sample_diff
-                )
+                // Fill the audio buffer with the pre-processed audio
+                let float_audio = audio_queue.drain(0..audio.len());
+                debug_assert!(float_audio.len() == audio.len());
+                for (datum, float_datum) in audio.iter_mut().zip(float_audio) {
+                    *datum = T::from(&float_datum);
+                }
+            }
+            else {
+                // We failed to lock the audio_queue which means that something has gone horribly wrong
+                audio.fill(T::from(&0_i16));
+                return;
             }
         };
 
-        if let Err(err) = audio_interface.set_stream_callback(output_callback) {
-            let msg = format!("Failed to play from Synth because we couldn't set the output callback: {}", err);
-            return Err(SynthError::new(&msg));
+        self.audio_interface.set_stream_callback(callback)?;
+        Ok(())
+    }
+
+    pub fn play(&mut self) -> SynthResult<()> {
+        match self.audio_interface.get_sample_format() {
+            cpal::SampleFormat::I16 => self.init_cpal_callback::<i16>()?,
+            cpal::SampleFormat::U16 => self.init_cpal_callback::<u16>()?,
+            cpal::SampleFormat::F32 => self.init_cpal_callback::<f32>()?,
+        };
+        self.audio_interface.play()
+    }
+
+    pub fn gen_samples(&mut self) -> SynthResult<()> {
+        if !self.audio_interface.is_playing() {
+            let msg = "Cannot generate samples while not playing";
+            return Err(SynthError::new(msg));
         }
 
-        if let Err(err) = audio_interface.play() {
-            let msg = format!("Failed to play audio stream: {}", err);
-            return Err(SynthError::new(&msg))
+        // A quick and dirty stop to generate no more than one second of audio
+        if let Ok(audio_queue) = self.audio_queue.lock() {
+            if audio_queue.len() > self.sample_rate {
+                return Ok(());
+            }
+        }
+
+        let cpal_info = self.audio_interface.get_info();
+        let channels = cpal_info.channels as usize;
+        let n_mono_samples = match cpal_info.buffer_size {
+            SupportedBufferSize::Range { min: _, max } => {
+                max as usize
+            },
+            SupportedBufferSize::Unknown => {
+                // uhhhhh
+                10_000
+            }
+        };
+        let mut multi_channel_audio = vec![0_f32; n_mono_samples * channels];
+
+        let output_info = OutputInfo::new(
+            cpal_info.sample_rate as usize,
+            cpal_info.channels,
+            self.master_sample_clock.get_range(n_mono_samples),
+            std::time::Instant::now() // wrong
+        );
+        self.output_module.fill_output_buffer(&mut multi_channel_audio, &output_info);
+
+        if let Ok(mut audio_queue) = self.audio_queue.lock() {
+            audio_queue.append(&mut multi_channel_audio);
         }
 
         Ok(())

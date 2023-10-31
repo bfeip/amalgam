@@ -1,18 +1,20 @@
-use super::{common::{SignalOutputModule, OutputInfo}, ModuleKey, NULL_KEY, ModuleManager};
+use std::rc::Rc;
+
+use super::common::{SynthModule, OutputInfo};
 
 /// A structure representing controls that would typically be on a output module
 /// of a modular synth.
 pub struct Output {
     volume: f32,
     panning: f32,
-    audio_input: ModuleKey,
+    audio_input: Option<Rc<dyn SynthModule>>
 }
 
 impl Output {
     pub fn new() -> Self {
         let volume = 1.0;
         let panning = 0.5;
-        let audio_input = NULL_KEY;
+        let audio_input = None;
 
         Self { volume, panning, audio_input }
     }
@@ -25,13 +27,13 @@ impl Output {
         self.panning = panning;
     }
 
-    pub fn set_audio_input(&mut self, audio_input: ModuleKey) {
+    pub fn set_audio_input(&mut self, audio_input: Option<Rc<dyn SynthModule>>) {
         self.audio_input = audio_input;
     }
 }
 
-impl SignalOutputModule for Output {
-    fn fill_output_buffer(&mut self, data: &mut [f32], output_info: &OutputInfo, manager: &ModuleManager) {
+impl SynthModule for Output {
+    fn fill_output_buffer(&self, data: &mut [f32], output_info: &OutputInfo) {
         let channel_count_usize = output_info.channel_count as usize;
         let total_buffer_len = data.len();
         debug_assert!(
@@ -44,8 +46,8 @@ impl SignalOutputModule for Output {
         let mut mono_channel_buffer = vec![0.0; mono_channel_len];
 
         // Get the audio for the one channel
-        if let Some(mut audio_input) = manager.get(self.audio_input) {
-            audio_input.fill_output_buffer(&mut mono_channel_buffer, output_info, manager);
+        if let Some(audio_input) = &self.audio_input {
+            audio_input.fill_output_buffer(&mut mono_channel_buffer, output_info);
         };
 
         // fill the final buffer with multi-channel data
