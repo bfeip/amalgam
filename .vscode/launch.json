@@ -1,29 +1,98 @@
 {
-    // Use IntelliSense to learn about possible attributes.
-    // Hover to view descriptions of existing attributes.
-    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
-    "configurations": [ 
+    "configurations": [
         {
-            "name": "Win play_from_midi",
-            "type": "cppvsdbg",
+            "type": "lldb",
             "request": "launch",
-            "program": "${workspaceRoot}/target/debug/examples/play_from_midi.exe",
+            "name": "Debug unit tests in library 'amalgam'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=amalgam"
+                ],
+                "filter": {
+                    "name": "amalgam",
+                    "kind": "lib"
+                }
+            },
             "args": [],
-            "stopAtEntry": false,
-            "cwd": "${workspaceRoot}/target/debug/examples",
-            "preLaunchTask": "cargo build play_from_midi",
+            "cwd": "${workspaceFolder}"
         },
         {
-            "name": "Lin play_from_midi",
             "type": "lldb",
-            "sourceLanguages": ["Rust"],
             "request": "launch",
-            "program": "${workspaceRoot}/target/debug/examples/play_from_midi",
+            "name": "Debug example 'play_from_midi'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=play_from_midi",
+                    "--package=amalgam"
+                ],
+                "filter": {
+                    "name": "play_from_midi",
+                    "kind": "example"
+                }
+            },
             "args": [],
-            "stopOnEntry": false,
-            "cwd": "${workspaceRoot}/target/debug/examples",
-            "preLaunchTask": "cargo build play_from_midi",
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'play_from_midi'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=play_from_midi",
+                    "--package=amalgam"
+                ],
+                "filter": {
+                    "name": "play_from_midi",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'play_tone'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=play_tone",
+                    "--package=amalgam"
+                ],
+                "filter": {
+                    "name": "play_tone",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'play_tone'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=play_tone",
+                    "--package=amalgam"
+                ],
+                "filter": {
+                    "name": "play_tone",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
         }
     ]
 }

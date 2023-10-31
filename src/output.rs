@@ -72,23 +72,6 @@ impl AudioInterface {
         let min_sample_rate = supported_config.min_sample_rate();
         let max_sample_rate = supported_config.max_sample_rate();
 
-        // Print configuration details to console if requested
-        #[cfg(feature = "audio_printing")]
-        {
-            let device_name = device.name();
-            if device_name.is_err() {
-                let msg = format!("Not only could we not get a supported config. We also couldn't get the device name"); 
-                return Err(SynthError::new(&msg));
-            }
-            let device_name = device_name.unwrap(); // shadow
-            let sample_format = supported_config.sample_format();
-            
-            println!(
-                "Device name: {}\nSample format: {:#?}\nMin sample rate: {:#?}\nMax sample rate: {:#?}",
-                device_name, sample_format, min_sample_rate, max_sample_rate
-            );
-        }
-
         // Find a good sample rate. There are a few good rates we'll check for. If we can't get those
         // we'll just go for the max.
         let desired_sample_rates = [

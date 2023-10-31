@@ -28,9 +28,10 @@ impl Synth {
             }
         };
 
+        let sample_rate = audio_interface.get_sample_rate().0 as usize;
+
         let output_module = Output::new();
-        let master_sample_clock = clock::SampleClock::new(0);
-        let sample_rate = 0;
+        let master_sample_clock = clock::SampleClock::new(sample_rate);
 
         #[cfg(feature = "signal_logging")]
         let signal_logger = SignalLogger::new("final_signal.txt");
@@ -101,8 +102,16 @@ impl Synth {
             return Err(SynthError::new(msg));
         }
 
+        // A quick and dirty stop to generate no more than one second of audio
+        if let Ok(audio_queue) = self.audio_queue.lock() {
+            if audio_queue.len() > self.sample_rate {
+                return Ok(());
+            }
+        }
+
         let cpal_info = self.audio_interface.get_info();
-        let n_samples = match cpal_info.buffer_size {
+        let channels = cpal_info.channels as usize;
+        let n_mono_samples = match cpal_info.buffer_size {
             SupportedBufferSize::Range { min: _, max } => {
                 max as usize
             },
@@ -111,18 +120,18 @@ impl Synth {
                 10_000
             }
         };
-        let mut audio = vec![0_f32; n_samples];
+        let mut multi_channel_audio = vec![0_f32; n_mono_samples * channels];
 
         let output_info = OutputInfo::new(
             cpal_info.sample_rate as usize,
             cpal_info.channels,
-            self.master_sample_clock.get_range(n_samples),
+            self.master_sample_clock.get_range(n_mono_samples),
             std::time::Instant::now() // wrong
         );
-        self.output_module.fill_output_buffer(&mut audio, &output_info);
+        self.output_module.fill_output_buffer(&mut multi_channel_audio, &output_info);
 
         if let Ok(mut audio_queue) = self.audio_queue.lock() {
-            audio_queue.append(&mut audio);
+            audio_queue.append(&mut multi_channel_audio);
         }
 
         Ok(())
