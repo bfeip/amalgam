@@ -1,5 +1,5 @@
 use cpal::SupportedBufferSize;
-use crate::module::common::{SynthModule, OutputInfo};
+use crate::module::{SynthModule, OutputInfo};
 
 use super::error::{SynthResult, SynthError};
 use super::module::Output;

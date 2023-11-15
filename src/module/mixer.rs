@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use crate::prelude::*;
-use super::common::{SynthModule, OutputInfo, CompressionMode, compress_audio};
+use super::{SynthModule, OutputInfo, CompressionMode, compress_audio};
 use super::error::*;
 
 pub struct MixerInput {

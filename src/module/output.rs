@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use super::common::{SynthModule, OutputInfo};
+use super::{SynthModule, OutputInfo};
 
 /// A structure representing controls that would typically be on a output module
 /// of a modular synth.

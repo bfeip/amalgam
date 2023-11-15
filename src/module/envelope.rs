@@ -1,7 +1,7 @@
 use std::rc::Rc;
 use std::cell::Cell;
 
-use super::common::{SynthModule, OutputInfo};
+use super::{SynthModule, OutputInfo};
 
 #[derive(Debug, Clone, Copy, Hash)]
 enum Adsr {

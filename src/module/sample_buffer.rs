@@ -1,4 +1,4 @@
-use super::common::*;
+use super::{SynthModule, OutputInfo};
 
 pub struct SampleBuffer {
     samples: Vec<f32>,

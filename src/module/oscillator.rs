@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use crate::note;
 use crate::clock;
-use super::common::*;
+use super::{SynthModule, OutputInfo};
 
 const PI: f32 = std::f64::consts::PI as f32;
 const TAU: f32 = PI * 2.0;

@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use super::common::{SynthModule, OutputInfo};
+use super::{SynthModule, OutputInfo};
 
 #[derive(Clone)]
 pub struct Attenuverter {

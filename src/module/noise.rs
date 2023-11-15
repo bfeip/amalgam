@@ -1,6 +1,6 @@
 extern crate rand;
 
-use super::common::{SynthModule, OutputInfo};
+use super::{SynthModule, OutputInfo};
 
 pub struct NoiseGenerator {
 }

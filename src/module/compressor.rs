@@ -1,7 +1,7 @@
 use std::rc::Rc;
 use std::cell::Cell;
 
-use super::common::*;
+use super::{SynthModule, OutputInfo};
 
 const MICROSECONDS_PER_SECOND: f32 = 1_000_000.0;
 

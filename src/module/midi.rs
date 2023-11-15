@@ -2,7 +2,7 @@
 
 use crate::midi;
 use super::error::*;
-use super::common::*;
+use super::OutputTimestamp;
 
 use std::collections::HashSet;
 

@@ -1,7 +1,7 @@
 use std::rc::Rc;
 use std::cell::Cell;
 
-use super::common::{SynthModule, OutputInfo, EdgeDetection};
+use super::{SynthModule, OutputInfo, EdgeDetection};
 use super::error::*;
 
 const DEFAULT_STEP_INFO: StepInfo = StepInfo {
