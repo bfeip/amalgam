@@ -1,67 +1,52 @@
 use super::super::error::ModuleResult;
-use super::super::common::{NoteOutputModule, OutputInfo, OutputTimestamp};
+use super::super::OutputInfo;
 use super::super::midi::MidiModuleBase;
 use crate::midi;
 use crate::midi::data::NoteDelta;
-use crate::module::common::Connectable;
 use crate::note::{Note, NoteInterval};
 
 use std::collections::HashSet;
+use std::rc::Rc;
+use std::time::Instant;
 
 pub struct MidiNoteOutput {
-    midi_source: Connectable<MidiModuleBase>,
+    midi_source: Rc<MidiModuleBase>,
     active_notes: HashSet<u8>
 }
 
 impl MidiNoteOutput {
-    pub fn new(midi_source: Connectable<MidiModuleBase>) -> Self {
+    pub fn new(midi_source: Rc<MidiModuleBase>) -> Self {
         let on_notes = HashSet::new();
         Self { midi_source, active_notes: on_notes }
     }
 
     // Gets all notes that are currently on
     pub fn get_notes_on_absolute(&self) -> ModuleResult<HashSet<u8>> {
-        let midi_src = self.midi_source.get();
-        if midi_src.is_none() {
-            return Ok(HashSet::new());
-        }
-        midi_src.unwrap().get_notes_on_absolute()
+        self.midi_source.get_notes_on_absolute()
     }
     
     /// Gets changes in note state since the last time this was called
-    fn consume_notes_on_off_delta(
-        &mut self, n_microseconds: usize, timestamp: &OutputTimestamp
-    ) -> ModuleResult<midi::data::NoteDelta> {
-        let midi_src = self.midi_source.get();
-        if midi_src.is_none() {
-            return Ok(NoteDelta::new(0));
-        }
-        midi_src.unwrap().consume_notes_on_off_delta(n_microseconds, timestamp)
+    fn read_notes_on_off_delta(
+        &self, n_microseconds: usize, timestamp: &Instant
+    ) -> ModuleResult<NoteDelta> {
+        self.midi_source.read_notes_on_off_delta(n_microseconds, timestamp)
     }
 
     fn get_active_notes(&self) -> &HashSet<u8> {
         &self.active_notes
     }
-}
 
-impl NoteOutputModule for MidiNoteOutput {
-    fn get_output(&mut self, n_samples: usize, output_info: &OutputInfo) -> Vec<NoteInterval> {
+    fn read_note_intervals(&mut self, n_samples: usize, output_info: &OutputInfo) -> Vec<NoteInterval> {
         // TODO: This does not take retriggers into account. In a normal synth if a note went off and on again
         // at the same instant the envelope would be retriggered. But that doesn't happen here... 
-        let mut midi_source_lock = match self.midi_source.get() {
-            Some(midi_source_lock) => midi_source_lock,
-            None => {
-                return Vec::new();
-            }
-        };
 
         // Some timing stuff
         // (n_samples / sample_rate) * 1,000,000
         let sample_period_microseconds = n_samples * 1_000_000 / output_info.sample_rate;
-        let start_microseconds = midi_source_lock.get_time();
+        let start_microseconds = self.midi_source.get_time();
         let microseconds_per_sample = sample_period_microseconds / n_samples;
 
-        let note_delta = match midi_source_lock.consume_notes_on_off_delta(
+        let note_delta = match self.midi_source.read_notes_on_off_delta(
             sample_period_microseconds,
             &output_info.timestamp
         ) {
@@ -102,7 +87,6 @@ impl NoteOutputModule for MidiNoteOutput {
             // just play it immediately
             let sample_num = delta_start_microseconds.saturating_sub(start_microseconds) / microseconds_per_sample;
 
-            //let sample_num = (delta_start_microseconds - start_microseconds) / microseconds_per_sample;
             match delta.get_event_type() {
                 midi::data::NoteEventType::On => {
                     // When a note turns on we always create a new interval.
@@ -171,7 +155,7 @@ mod tests {
         midi_source_lock.set_channel(Some(0));
         drop(midi_source_lock);
 
-        let delta = match midi_module.consume_notes_on_off_delta(10_000_000, &OutputTimestamp::empty()) {
+        let delta = match midi_module.read_notes_on_off_delta(10_000_000, &OutputTimestamp::empty()) {
             Ok(delta) => delta,
             Err(err) => {
                 panic!("Failed to get note delta: {}", err);

@@ -25,7 +25,6 @@ pub use output::Output;
 
 use std::time::Instant;
 
-use crate::note::NoteInterval;
 use crate::clock::SampleRange;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -80,25 +79,6 @@ pub fn compress_audio(data: &mut [f32], compression_mode: CompressionMode) {
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq)]
-pub struct OutputTimestamp {
-    timestamp: Option<cpal::OutputStreamTimestamp>
-}
-
-impl OutputTimestamp {
-    pub fn new(timestamp: cpal::OutputStreamTimestamp) -> Self {
-        Self { timestamp: Some(timestamp) }
-    }
-
-    pub fn empty() -> Self {
-        Self { timestamp: None }
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.timestamp.is_none()
-    }
-}
-
 pub struct OutputInfo {
     pub sample_rate: usize,
     pub channel_count: u16,
@@ -126,8 +106,4 @@ impl OutputInfo {
 pub trait SynthModule {
     /// Fills a provided buffer with the signal output
     fn fill_output_buffer(&self, buffer: &mut [f32], output_info: &OutputInfo);
-}
-
-pub trait NoteOutputModule: Send {
-    fn get_output(&mut self, n_samples: usize, output_info: &OutputInfo) -> Vec<NoteInterval>;
 }

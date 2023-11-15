@@ -1,28 +1,66 @@
-//pub mod midi_note;
+pub mod midi_note;
 
 use crate::midi;
+use crate::midi::data::NoteDelta;
 use super::error::*;
-use super::OutputTimestamp;
 
 use std::collections::HashSet;
+use std::time::Instant;
+use std::cell::{Cell, RefCell};
 
+#[derive(Debug, Clone, Copy, Hash)]
 struct TimestampDuration {
     start_microseconds: usize,
     end_microseconds: usize
+}
+
+#[derive(Debug, Clone)]
+struct MidiCache {
+    timestamp: Instant,
+    timestamp_duration: TimestampDuration,
+    cached_note_delta: Option<NoteDelta>,
+}
+
+impl MidiCache {
+    fn new() -> Self {
+        let timestamp = Instant::now();
+        let timestamp_duration = TimestampDuration{ start_microseconds: 0, end_microseconds: 0 };
+        let cached_note_delta = None;
+        Self {
+            timestamp,
+            timestamp_duration,
+            cached_note_delta
+        }
+    }
+
+    fn invalidate(&mut self) {
+        self.cached_note_delta = None;
+    }
+
+    fn set_note_delta(&mut self, time: &Instant, duration: &TimestampDuration, delta: &NoteDelta) {
+        if *time != self.timestamp {
+            self.invalidate();
+            self.timestamp = *time;
+            self.timestamp_duration = *duration;
+        }
+        self.cached_note_delta = Some(delta.clone());
+    }
+
+    fn try_get_note_delta(&self, time: &Instant) -> Option<&NoteDelta> {
+        if *time == self.timestamp {
+            return self.cached_note_delta.as_ref();
+        }
+        None
+    }
 }
 
 pub struct MidiModuleBase {
     data: midi::data::MidiData,
     track: usize,
     channel: Option<usize>,
-
     playing: bool,
-
-    cache_timestamp: OutputTimestamp,
-    cache_timestamp_duration: TimestampDuration,
-    cached_note_delta: Option<midi::data::NoteDelta>,
-
-    microseconds_read: usize,
+    cache: RefCell<MidiCache>,
+    microseconds_read: Cell<usize>,
 }
 
 impl MidiModuleBase {
@@ -36,24 +74,18 @@ impl MidiModuleBase {
         };
         let track = 0;
         let channel = None;
-
         let playing = true;
-
-        let cache_timestamp = OutputTimestamp::empty();
-        let cache_timestamp_duration = TimestampDuration{ start_microseconds: 0, end_microseconds: 0 };
-        let cached_note_delta = None;
-
-        let microseconds_read = 0;
+        let cache = RefCell::new(MidiCache::new());
+        let microseconds_read = Cell::new(0);
 
         Ok(Self {
             data,
             track,
             channel,
             playing,
-            cache_timestamp,
-            cache_timestamp_duration,
-            cached_note_delta,
-            microseconds_read })
+            cache,
+            microseconds_read 
+        })
     }
 
     pub fn set_track(&mut self, track_number: usize) -> ModuleResult<()> {
@@ -81,30 +113,32 @@ impl MidiModuleBase {
     }
 
     pub fn set_time(&mut self, microseconds: usize) {
-        self.microseconds_read = microseconds;
+        self.microseconds_read = Cell::new(microseconds);
         self.invalidate_cache();
     }
 
     pub fn rewind_time(&mut self, microseconds: usize) {
-        self.microseconds_read = self.microseconds_read.saturating_sub(microseconds);
+        let new_time = self.microseconds_read.get().saturating_sub(microseconds);
+        self.microseconds_read.set(new_time);
         self.invalidate_cache();
     }
 
     pub fn fastforward_time(&mut self, microseconds: usize) {
-        self.microseconds_read += microseconds;
+        let new_time = self.microseconds_read.get() + microseconds;
+        self.microseconds_read.set(new_time);
         self.invalidate_cache();
     }
 
     pub fn get_time(&self) -> usize {
-        self.microseconds_read
+        self.microseconds_read.get()
     }
 
     fn invalidate_cache(&mut self) {
-        self.cached_note_delta = None;
+        self.cache.get_mut().invalidate();
     }
 
     pub fn get_notes_on_absolute(&self) -> ModuleResult<HashSet<u8>> {
-        let notes_on_result = self.data.get_notes_on_absolute(self.track, self.channel, self.microseconds_read);
+        let notes_on_result = self.data.get_notes_on_absolute(self.track, self.channel, self.microseconds_read.get());
         match notes_on_result {
             Ok(notes_on) => Ok(notes_on),
             Err(err) => {
@@ -114,29 +148,16 @@ impl MidiModuleBase {
         }
     }
 
-    pub fn consume_notes_on_off_delta(
-        &mut self, n_microseconds: usize, timestamp: &OutputTimestamp
-    ) -> ModuleResult<midi::data::NoteDelta> {
-        if !timestamp.is_empty() && *timestamp == self.cache_timestamp {
-            // We're getting a delta again for the sample range we consumed last time
-            match &self.cached_note_delta {
-                Some(cached_note_delta) => {
-                    // We already got a note delta for this sample range, return it
-                    return Ok(cached_note_delta.clone());
-                }
-                None => {
-                    // We have a re-read the past sample range
-                    let duration = &self.cache_timestamp_duration;
-                    debug_assert!(
-                        duration.end_microseconds - duration.start_microseconds == n_microseconds,
-                        "Duration we're re-reading now does not match duration we read last time"
-                    );
-                    self.microseconds_read = duration.start_microseconds;
-                }
-            }
+    pub fn read_notes_on_off_delta(
+        &self, n_microseconds: usize, timestamp: &Instant
+    ) -> ModuleResult<NoteDelta> {
+        let mut cache = self.cache.borrow_mut();
+        if let Some(cached_deltas) = cache.try_get_note_delta(timestamp) {
+            // We already got these deltas earlier, just send them again
+            return Ok(cached_deltas.clone());
         }
 
-        let start_microseconds = self.microseconds_read;
+        let start_microseconds = self.microseconds_read.get();
         let end_microseconds = start_microseconds + n_microseconds;
 
         let note_delta_result = self.data.get_notes_delta(
@@ -147,10 +168,9 @@ impl MidiModuleBase {
         );
         match note_delta_result {
             Ok(notes_delta) => {
-                self.cached_note_delta = Some(notes_delta.clone());
-                self.cache_timestamp = timestamp.clone();
-                self.cache_timestamp_duration = TimestampDuration { start_microseconds, end_microseconds };
-                self.microseconds_read += n_microseconds;
+                let duration = TimestampDuration { start_microseconds, end_microseconds };
+                cache.set_note_delta(timestamp, &duration, &notes_delta);
+                self.microseconds_read.set(start_microseconds + n_microseconds);
 
                 Ok(notes_delta)
             },
