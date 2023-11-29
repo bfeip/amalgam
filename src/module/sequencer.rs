@@ -2,7 +2,7 @@ use std::rc::Rc;
 use std::cell::Cell;
 
 use super::{SynthModule, OutputInfo, EdgeDetection};
-use super::error::*;
+use crate::{SynthError, SynthResult};
 
 const DEFAULT_STEP_INFO: StepInfo = StepInfo {
     kind: SequencerStepKind::Normal,
@@ -85,21 +85,21 @@ impl Sequencer {
         self.steps.get(self.current_step.get())
     }
 
-    pub fn set_step_info(&mut self, step_index: usize, step_info: &StepInfo) -> ModuleResult<()> {
+    pub fn set_step_info(&mut self, step_index: usize, step_info: &StepInfo) -> SynthResult<()> {
         match self.steps.get_mut(step_index) {
             Some(step) => *step = *step_info,
             None => {
                 let msg = "Failed to set sequencer step info because index was out of bounds";
-                return Err(ModuleError::new(msg));
+                return Err(SynthError::new(msg));
             }
         }
         Ok(())
     }
 
-    pub fn remove_step(&mut self, step_index: usize) -> ModuleResult<()> {
+    pub fn remove_step(&mut self, step_index: usize) -> SynthResult<()> {
         if step_index > self.steps.len() {
             let msg = "Failed to remove sequencer step because index is out of bounds";
-            return Err(ModuleError::new(msg));
+            return Err(SynthError::new(msg));
         }
 
         self.steps.remove(step_index);

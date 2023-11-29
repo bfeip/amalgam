@@ -1,5 +1,3 @@
-pub mod error;
-
 mod sample_buffer;
 mod compressor;
 mod attenuverter;

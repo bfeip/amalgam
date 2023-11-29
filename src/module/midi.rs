@@ -2,7 +2,7 @@ pub mod midi_note;
 
 use crate::midi;
 use crate::midi::data::NoteDelta;
-use super::error::*;
+use crate::{SynthError, SynthResult};
 
 use std::collections::HashSet;
 use std::time::Instant;
@@ -64,12 +64,12 @@ pub struct MidiModuleBase {
 }
 
 impl MidiModuleBase {
-    pub fn open<P: AsRef<std::path::Path>>(path: P) -> ModuleResult<Self> {
+    pub fn open<P: AsRef<std::path::Path>>(path: P) -> SynthResult<Self> {
         let data = match midi::data::MidiData::from_file(path) {
             Ok(data) => data,
             Err(err) => {
                 let msg = format!("Failed to create MIDI file module: {}", err);
-                return Err(ModuleError::new(&msg));
+                return Err(SynthError::new(&msg));
             }
         };
         let track = 0;
@@ -88,13 +88,13 @@ impl MidiModuleBase {
         })
     }
 
-    pub fn set_track(&mut self, track_number: usize) -> ModuleResult<()> {
+    pub fn set_track(&mut self, track_number: usize) -> SynthResult<()> {
         let track_len = self.data.get_tracks().len();
         if self.data.get_tracks().len() <= track_number {
             let msg = format!(
                 "MIDI track out of range. Attempted to set to {}, max track: {}", track_number, track_len
             );
-            return Err(ModuleError::new(&msg));
+            return Err(SynthError::new(&msg));
         }
         self.track = track_number;
         Ok(())
@@ -137,20 +137,20 @@ impl MidiModuleBase {
         self.cache.get_mut().invalidate();
     }
 
-    pub fn get_notes_on_absolute(&self) -> ModuleResult<HashSet<u8>> {
+    pub fn get_notes_on_absolute(&self) -> SynthResult<HashSet<u8>> {
         let notes_on_result = self.data.get_notes_on_absolute(self.track, self.channel, self.microseconds_read.get());
         match notes_on_result {
             Ok(notes_on) => Ok(notes_on),
             Err(err) => {
                 let msg = format!("Failed to get notes on from MIDI: {}", err);
-                return Err(ModuleError::new(&msg));
+                return Err(SynthError::new(&msg));
             }
         }
     }
 
     pub fn read_notes_on_off_delta(
         &self, n_microseconds: usize, timestamp: &Instant
-    ) -> ModuleResult<NoteDelta> {
+    ) -> SynthResult<NoteDelta> {
         let mut cache = self.cache.borrow_mut();
         if let Some(cached_deltas) = cache.try_get_note_delta(timestamp) {
             // We already got these deltas earlier, just send them again
@@ -176,7 +176,7 @@ impl MidiModuleBase {
             },
             Err(err) => {
                 let msg = format!("Failed to get notes delta from MIDI: {}", err);
-                return Err(ModuleError::new(&msg));
+                return Err(SynthError::new(&msg));
             }
         }
     }

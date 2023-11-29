@@ -1,6 +1,6 @@
 use std::io;
 
-use super::super::super::error::*;
+use crate::{SynthError, SynthResult};
 use super::EventType;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -38,7 +38,7 @@ pub enum ControllerEvent {
 }
 
 impl ControllerEvent {
-    pub fn from_byte(byte: u8) -> MidiResult<Self> {
+    pub fn from_byte(byte: u8) -> SynthResult<Self> {
         let controller_event = match byte {
             0x00        => ControllerEvent::BankSelect,
             0x01        => ControllerEvent::Modulation,
@@ -73,7 +73,7 @@ impl ControllerEvent {
             0x79..=0x7F => ControllerEvent::ModeMessages(byte - 0x79),
             _ => {
                 let msg = format!("unknown MIDI controller message {:#04x}", byte);
-                return Err(MidiError::new(&msg)) 
+                return Err(SynthError::new(&msg)) 
             }
         };
         Ok(controller_event)
@@ -102,7 +102,7 @@ impl MidiChannelEvent {
         Self { channel, event_body }
     }
 
-    pub fn parse<T: io::Read>(mut midi_stream: T, event_type: EventType, channel: u8) -> MidiResult<MidiChannelEvent> {
+    pub fn parse<T: io::Read>(mut midi_stream: T, event_type: EventType, channel: u8) -> SynthResult<MidiChannelEvent> {
         let mut param1_byte: [u8; 1] = [0; 1];
         let mut param2_byte: [u8; 1] = [0; 1];
         read_with_eof_check!(midi_stream, &mut param1_byte);
@@ -131,14 +131,14 @@ impl MidiChannelEvent {
             Ok(inner_event) => inner_event,
             Err(err) => {
                 let msg = format!("Failed to parse MIDI inner channel event: {}", err);
-                return Err(MidiError::new(&msg));
+                return Err(SynthError::new(&msg));
             }
         };
 
         Ok(MidiChannelEvent { channel, event_body })
     }
 
-    fn new_event_body(event_type: EventType, param1: u8, param2: Option<u8>) -> MidiResult<ChannelEventBody> {
+    fn new_event_body(event_type: EventType, param1: u8, param2: Option<u8>) -> SynthResult<ChannelEventBody> {
         let event = match event_type {
             EventType::NoteOff => ChannelEventBody::NoteOff {
                 note: param1, velocity: param2.expect("Expected this event to have a second param")
@@ -154,7 +154,7 @@ impl MidiChannelEvent {
                     Ok(controller_event) => controller_event,
                     Err(err) => {
                         let msg = format!("Failed to parse MIDI controller event: {}", err);
-                        return Err(MidiError::new(&msg));
+                        return Err(SynthError::new(&msg));
                     }
                 };
                 ChannelEventBody::Controller {
@@ -172,7 +172,7 @@ impl MidiChannelEvent {
             _ => {
                 let event_byte = event_type.to_byte();
                 let msg = format!("Unknown channel event type {:#03x}", event_byte);
-                return Err(MidiError::new(&msg));
+                return Err(SynthError::new(&msg));
             }
         };
         Ok(event)

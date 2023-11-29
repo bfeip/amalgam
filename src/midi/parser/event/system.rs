@@ -1,7 +1,7 @@
 use std::io;
 
 use super::super::{parse_variable_length};
-use crate::midi::error::*;
+use crate::{SynthError, SynthResult};
 
 const NORMAL_TYPE_BYTE: u8 = 0xF0;
 const DIVIDED_OR_AUTH_TYPE_BYTE: u8 = 0xF7;
@@ -18,17 +18,17 @@ impl SystemEvent {
         mut midi_stream: T,
         type_byte: u8,
         divided_bytes: &mut Vec<u8>
-    ) -> MidiResult<SystemEvent> {
+    ) -> SynthResult<SystemEvent> {
         let size = match parse_variable_length(&mut midi_stream) {
             Ok(size) => size,
             Err(err) => {
                 let msg = format!("Failed to parse system event size: {}", err);
-                return Err(MidiError::new(&msg));
+                return Err(SynthError::new(&msg));
             }
         };
         if size == 0 {
             let msg = "Size of system event is 0";
-            return Err(MidiError::new(msg));
+            return Err(SynthError::new(msg));
         }
 
         match type_byte {
@@ -62,7 +62,7 @@ impl SystemEvent {
                     }
                     // There's even more
                     // TODO: We're passed a reference for divided bytes that we extend and then clone here.
-                    // This is inefficent since the bytes in a divided event aren't even useful until
+                    // This is inefficient since the bytes in a divided event aren't even useful until
                     // the whole thing is completed.
                     return Ok(SystemEvent::Divided(divided_bytes.clone()))
                 }
@@ -77,7 +77,7 @@ impl SystemEvent {
             }
             _ => {
                 let msg = format!("Tried to parse system byte but type was unexpected {:#04x}", type_byte);
-                return Err(MidiError::new(&msg));
+                return Err(SynthError::new(&msg));
             }
         }
     }

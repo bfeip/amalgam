@@ -1,8 +1,8 @@
 use std::rc::Rc;
 
 use crate::prelude::*;
+use crate::{SynthError, SynthResult};
 use super::{SynthModule, OutputInfo, CompressionMode, compress_audio};
-use super::error::*;
 
 pub struct MixerInput {
     input: Option<Rc<dyn SynthModule>>,
@@ -55,10 +55,10 @@ impl Mixer {
         self.inputs.push(input);
     }
 
-    pub fn remove_input(&mut self, input_index: usize) -> ModuleResult<()> {
+    pub fn remove_input(&mut self, input_index: usize) -> SynthResult<()> {
         if input_index > self.inputs.len() {
             let msg = "Tried to remove element from mixer that was out of bounds";
-            return Err(ModuleError::new(msg));
+            return Err(SynthError::new(msg));
         }
         self.inputs.remove(input_index);
         Ok(())

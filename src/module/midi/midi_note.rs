@@ -1,6 +1,6 @@
-use super::super::error::ModuleResult;
 use super::super::OutputInfo;
 use super::super::midi::MidiModuleBase;
+use crate::SynthResult;
 use crate::midi;
 use crate::midi::data::NoteDelta;
 use crate::note::{Note, NoteInterval};
@@ -21,14 +21,14 @@ impl MidiNoteOutput {
     }
 
     // Gets all notes that are currently on
-    pub fn get_notes_on_absolute(&self) -> ModuleResult<HashSet<u8>> {
+    pub fn get_notes_on_absolute(&self) -> SynthResult<HashSet<u8>> {
         self.midi_source.get_notes_on_absolute()
     }
     
     /// Gets changes in note state since the last time this was called
     fn read_notes_on_off_delta(
         &self, n_microseconds: usize, timestamp: &Instant
-    ) -> ModuleResult<NoteDelta> {
+    ) -> SynthResult<NoteDelta> {
         self.midi_source.read_notes_on_off_delta(n_microseconds, timestamp)
     }
 

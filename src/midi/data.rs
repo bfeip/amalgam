@@ -1,5 +1,5 @@
+use crate::{SynthError, SynthResult};
 use super::parser;
-use super::error::*;
 
 use std::collections::HashSet;
 
@@ -13,12 +13,12 @@ pub struct MidiData {
 }
 
 impl MidiData {
-    pub fn from_file<P: AsRef<std::path::Path>>(path: P) -> MidiResult<Self> {
+    pub fn from_file<P: AsRef<std::path::Path>>(path: P) -> SynthResult<Self> {
         let parser_data = match parser::MidiData::from_file(path) {
             Ok(parser_data) => parser_data,
             Err(err) => {
                 let msg = format!("Failed to parse MIDI file: {}", err);
-                return Err(MidiError::new(&msg));
+                return Err(SynthError::new(&msg));
             }
         };
 
@@ -45,12 +45,12 @@ impl MidiData {
         track_number: usize,
         channel_number: Option<usize>,
         microseconds_read: usize
-    ) -> MidiResult<HashSet<u8>> {
+    ) -> SynthResult<HashSet<u8>> {
         let track = match self.tracks.get(track_number) {
             Some(track) => track,
             None => {
                 let msg = "Tried to get notes for non-existent track";
-                return Err(MidiError::new(msg));
+                return Err(SynthError::new(msg));
             }
         };
         let tick_position = microseconds_read * track.ticks_per_second(self.time_division) / 1_000_000;
@@ -64,12 +64,12 @@ impl MidiData {
         channel_number: Option<usize>,
         start_time_microseconds: usize, 
         end_time_microseconds: usize
-    ) -> MidiResult<NoteDelta> {
+    ) -> SynthResult<NoteDelta> {
         let track = match self.tracks.get(track_number) {
             Some(track) => track,
             None => {
                 let msg = "Tried to get notes for non-existent track";
-                return Err(MidiError::new(msg));
+                return Err(SynthError::new(msg));
             }
         };
 
@@ -165,13 +165,13 @@ impl Track {
         ret
     }
 
-    fn get_notes_on_absolute(&self, channel_number: Option<usize>, tick_position: usize) -> MidiResult<HashSet<u8>> {
+    fn get_notes_on_absolute(&self, channel_number: Option<usize>, tick_position: usize) -> SynthResult<HashSet<u8>> {
         if let Some(channel_number) = channel_number {
             let channel = match self.channels.get(channel_number) {
                 Some(channel) => channel,
                 None => {
                     let msg = "Tried to get notes for non-existent channel";
-                    return Err(MidiError::new(msg));
+                    return Err(SynthError::new(msg));
                 }
             };
 
@@ -189,13 +189,13 @@ impl Track {
     fn get_notes_delta(
         &self, channel_number: Option<usize>, ticks_per_second: usize,
         old_tick_position: usize, new_tick_position: usize
-    ) -> MidiResult<NoteDelta> {
+    ) -> SynthResult<NoteDelta> {
         if let Some(channel_number) = channel_number {
             let channel = match self.channels.get(channel_number) {
                 Some(channel) => channel,
                 None => {
                     let msg = "Tried to get notes for non-existent channel";
-                    return Err(MidiError::new(msg));
+                    return Err(SynthError::new(msg));
                 }
             };
 
@@ -420,7 +420,7 @@ mod tests {
     use super::*;
     use crate::util::test_util;
 
-    fn get_test_midi_data() -> MidiResult<MidiData> {
+    fn get_test_midi_data() -> SynthResult<MidiData> {
         let path = test_util::get_test_midi_file_path();
         MidiData::from_file(path)
     }
