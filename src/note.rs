@@ -97,8 +97,7 @@ impl Note {
     
         // E.g. A4 shifted down one octave is 440 * (2^-1) 
         let freq_shift_degree = 2_f32.powi(octave_shift as i32);
-        let freq = default_freq * freq_shift_degree as f32;
-        freq
+        default_freq * freq_shift_degree
     }
 }
 
@@ -115,10 +114,10 @@ impl NoteInterval {
     }
 
     pub fn overlaps(&self, other: &NoteInterval) -> bool {
-        let this_start = self.start.or(Some(0)).unwrap();
-        let this_end = self.end.or(Some(usize::MAX)).unwrap();
-        let other_start = other.start.or(Some(0)).unwrap();
-        let other_end = other.end.or(Some(usize::MAX)).unwrap();
+        let this_start = self.start.unwrap_or(0);
+        let this_end = self.end.unwrap_or(usize::MAX);
+        let other_start = other.start.unwrap_or(0);
+        let other_end = other.end.unwrap_or(usize::MAX);
 
         if this_start >= other_start && this_start < other_end {
             // This starts within other
@@ -133,7 +132,7 @@ impl NoteInterval {
             return true;
         }
 
-        return false;
+        false
     }
 }
 

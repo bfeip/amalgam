@@ -41,7 +41,7 @@ pub enum CompressionMode {
 
 pub fn compress_audio(data: &mut [f32], compression_mode: CompressionMode) {
     match compression_mode {
-        CompressionMode::None => return,
+        CompressionMode::None => (),
         CompressionMode::Compress => {
             // TODO: This might be the poor man's compression. Should research into doing it proper
             // Find largest element of the buffer

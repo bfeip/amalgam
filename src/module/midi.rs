@@ -143,7 +143,7 @@ impl MidiModuleBase {
             Ok(notes_on) => Ok(notes_on),
             Err(err) => {
                 let msg = format!("Failed to get notes on from MIDI: {}", err);
-                return Err(SynthError::new(&msg));
+                Err(SynthError::new(&msg))
             }
         }
     }
@@ -176,7 +176,7 @@ impl MidiModuleBase {
             },
             Err(err) => {
                 let msg = format!("Failed to get notes delta from MIDI: {}", err);
-                return Err(SynthError::new(&msg));
+                Err(SynthError::new(&msg))
             }
         }
     }

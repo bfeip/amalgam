@@ -60,7 +60,7 @@ impl AudioInterface {
             None => {
                 let device_name = device.name();
                 if device_name.is_err() {
-                    let msg = format!("Not only could we not get a supported config. We also couldn't get the device name"); 
+                    let msg = "Not only could we not get a supported config. We also couldn't get the device name".to_string(); 
                     return Err(SynthError::new(&msg));
                 }
                 let device_name = device_name.unwrap(); // shadow
@@ -161,7 +161,7 @@ impl AudioInterface {
     }
 
     pub fn is_playing(&self) -> bool {
-        return self.playing;
+        self.playing
     }
 
     /// Gets a bunch of info about this struct and puts it into an easily printable `CpalInfo`

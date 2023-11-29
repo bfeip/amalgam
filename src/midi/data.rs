@@ -361,10 +361,10 @@ impl ChannelEvent {
     fn new(time_offset: usize, parser_event: &parser::event::channel::MidiChannelEvent) -> Self {
         use parser::event::channel::ChannelEventBody;
         let parser_event_body = parser_event.get_inner_event();
-        match parser_event_body {
-            &ChannelEventBody::NoteOn{ note, velocity } =>
+        match *parser_event_body {
+            ChannelEventBody::NoteOn{ note, velocity } =>
                 ChannelEvent::Note(NoteEvent::new(time_offset, NoteEventType::On, note, velocity)),
-            &ChannelEventBody::NoteOff{ note, velocity } =>
+            ChannelEventBody::NoteOff{ note, velocity } =>
                 ChannelEvent::Note(NoteEvent::new(time_offset, NoteEventType::Off, note, velocity)),
             _ => ChannelEvent::Unused
         }

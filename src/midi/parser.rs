@@ -116,7 +116,7 @@ impl HeaderChunk {
         let time_division_u16 = u16::from_be_bytes(time_division_bytes);
         let time_division = match time_division_u16 & 0x8000 {
             0x8000 => {
-                let frames_per_second = (time_division_u16 >> 8) as u8 & 0x7F as u8;
+                let frames_per_second = (time_division_u16 >> 8) as u8 & 0x7F_u8;
                 let ticks_per_frame = (time_division_u16 & 0xFF) as u8;
                 TimeDivision::FramesPerSecond { frames_per_second, ticks_per_frame}
             },
@@ -295,14 +295,13 @@ fn parse_variable_length<T: io::Read>(mut midi_stream: T) -> SynthResult<usize> 
 
     #[cfg(feature = "verbose_midi")]
     {
-        println!("Parsed MIDI variable langth field with bytes {:?} and value {:?}", bytes, total_value);
+        println!("Parsed MIDI variable length field with bytes {:?} and value {:?}", bytes, total_value);
     }
     Ok(total_value)
 }
 
 fn parse_string<T: io::Read>(mut midi_stream: T, size: usize) -> SynthResult<String> {
-    let mut byte_array = Vec::with_capacity(size);
-    byte_array.resize(size, 0_u8);
+    let mut byte_array = vec![0; size];
     read_with_eof_check!(midi_stream, &mut byte_array);
     let string = match String::from_utf8(byte_array) {
         Ok(string) => string,
@@ -320,7 +319,7 @@ fn parse_string<T: io::Read>(mut midi_stream: T, size: usize) -> SynthResult<Str
 
 fn throw_unexpected_eof(err: io::Error) -> SynthResult<()> {
     let msg = format!("Unexpected EOF: {}", err);
-    return Err(SynthError::new(&msg));
+    Err(SynthError::new(&msg))
 }
 
 #[cfg(test)]

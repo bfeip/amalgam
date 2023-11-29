@@ -79,7 +79,6 @@ impl Synth {
             else {
                 // We failed to lock the audio_queue which means that something has gone horribly wrong
                 audio.fill(T::from(&0_i16));
-                return;
             }
         };
 

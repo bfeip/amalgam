@@ -102,7 +102,7 @@ impl SynthModule for Mixer {
             }
             
             for i in 0..data_len {
-                *&mut data[i] += data_buffer[i];
+                data[i] += data_buffer[i];
             }
         }
 

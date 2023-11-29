@@ -50,10 +50,7 @@ impl Sequencer {
     }
 
     pub fn with_steps(step_count: usize) -> Self {
-        let mut steps = Vec::with_capacity(step_count);
-        for _ in 0..step_count {
-            steps.push(DEFAULT_STEP_INFO);
-        }
+        let steps = vec![DEFAULT_STEP_INFO; step_count];
 
         let playing = Cell::new(false);
         let cycle = true;
@@ -158,7 +155,7 @@ impl Sequencer {
                 return false;
             }
         }
-        return true; // Also considered true if there are no steps
+        true // Also considered true if there are no steps
     }
 
     pub fn start(&self) {
@@ -203,6 +200,10 @@ impl Sequencer {
 
     pub fn len(&self) -> usize {
         self.steps.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.steps.len() == 0
     }
 }
 

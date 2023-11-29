@@ -34,8 +34,7 @@ impl SystemEvent {
         match type_byte {
             NORMAL_TYPE_BYTE => {
                 // Normal system event or beginning of divided event
-                let mut data = Vec::with_capacity(size);
-                data.resize(size, 0_u8);
+                let mut data = vec![0; size];
                 let data_slice = &mut data;
                 read_with_eof_check!(midi_stream, data_slice);
                 if *data.last().expect("Data is empty? But size isn't 0?") == 0xF7 {
@@ -51,8 +50,7 @@ impl SystemEvent {
             DIVIDED_OR_AUTH_TYPE_BYTE => {
                 // We're in the middle of a divided event, or this is an Authorization event
                 if !divided_bytes.is_empty() {
-                    let mut additional_data = Vec::with_capacity(size);
-                    additional_data.resize(size, 0_u8);
+                    let mut additional_data = vec![0; size];
                     let data_slice = &mut additional_data;
                     read_with_eof_check!(midi_stream, data_slice);
                     divided_bytes.extend_from_slice(data_slice);
@@ -64,20 +62,19 @@ impl SystemEvent {
                     // TODO: We're passed a reference for divided bytes that we extend and then clone here.
                     // This is inefficient since the bytes in a divided event aren't even useful until
                     // the whole thing is completed.
-                    return Ok(SystemEvent::Divided(divided_bytes.clone()))
+                    Ok(SystemEvent::Divided(divided_bytes.clone()))
                 }
                 else {
                     // Authorization event
-                    let mut event_data = Vec::with_capacity(size);
-                    event_data.resize(size, 0_u8);
+                    let mut event_data = vec![0; size];
                     let data_slice = &mut event_data;
                     read_with_eof_check!(midi_stream, data_slice);
-                    return Ok(SystemEvent::Authorization(event_data))
+                    Ok(SystemEvent::Authorization(event_data))
                 }
             }
             _ => {
                 let msg = format!("Tried to parse system byte but type was unexpected {:#04x}", type_byte);
-                return Err(SynthError::new(&msg));
+                Err(SynthError::new(&msg))
             }
         }
     }
