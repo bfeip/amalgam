@@ -1,10 +1,10 @@
 # TODO
 
 ## Right Now
-- How MIDI notes are read needs a tune up for sure. Especially since MIDI notes should no longer come out of a module
 - Oscillator needs to not rely on a supplied sample range. The calculation should be immutable and only need to rely on the playback time.
+- midi freq output needs to be normalized to -1.0 to 1.0
+- Oscillator triangle output
 - Implement noise finally
-- There needs to be a way to get multiple outputs from a single module. Eg. sine and triangle wave from an oscillator at the same time.
 - Tests need to be completely redone I think
 
 ## Docs and comments and cleanup
@@ -12,6 +12,9 @@ There's some docs but I really just need to run through the whole codebase and d
 
 ## Filters
 I really just need to sit down and start working on this FFT stuff. No reading books first. No doing my own FFT. Just pick a crate and implement a low pass filter as best I can.
+
+## Multi Output
+There needs to be a way to get multiple outputs from a single midi module. This will probably involve smaller modules inside the "main" module
 
 ## Split MIDI crate
 The MIDI functionality is kinda relatively complete. It could be split into a separate crate and then I could just publish that separately.

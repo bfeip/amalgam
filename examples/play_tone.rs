@@ -15,7 +15,6 @@ fn main() -> SynthResult<()> {
     let oscillator = Rc::new(amalgam::module::Oscillator::new());
     synth.get_output_module_mut().set_audio_input(Some(oscillator));
 
-    //synth.gen_samples()?;
     synth.play()?;
 
     loop {

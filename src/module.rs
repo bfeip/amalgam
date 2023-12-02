@@ -18,7 +18,7 @@ pub use sequencer::Sequencer;
 pub use mixer::Mixer;
 pub use envelope::Envelope;
 pub use midi::MidiModuleBase;
-//pub use midi::midi_note::MidiNoteOutput;
+pub use midi::midi_note::MidiNoteOutput;
 pub use output::Output;
 
 use std::time::Instant;

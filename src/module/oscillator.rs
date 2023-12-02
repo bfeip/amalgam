@@ -29,6 +29,8 @@ pub struct Oscillator {
     pulse_width: f32,
     /// Linear freq modulation input
     linear_freq_input: Option<Rc<dyn SynthModule>>,
+    /// Exponential freq modulation input
+    exponential_freq_input: Option<Rc<dyn SynthModule>>,
 }
 
 impl Oscillator {
@@ -38,7 +40,14 @@ impl Oscillator {
         let frequency = note::FREQ_C;
         let pulse_width = 0.5;
         let linear_freq_input = None;
-        Oscillator { waveform, frequency, pulse_width, linear_freq_input }
+        let exponential_freq_input = None;
+        Oscillator {
+            waveform,
+            frequency,
+            pulse_width,
+            linear_freq_input,
+            exponential_freq_input
+        }
     }
 
     pub fn set_waveform(&mut self, waveform: Waveform) {
@@ -66,9 +75,15 @@ impl Oscillator {
     }
 
     pub fn set_linear_freq_input(
-        &mut self, override_input: Option<Rc<dyn SynthModule>>
+        &mut self, input: Option<Rc<dyn SynthModule>>
     ) {
-        self.linear_freq_input = override_input;
+        self.linear_freq_input = input;
+    }
+
+    pub fn set_exponential_freq_input(
+        &mut self, input: Option<Rc<dyn SynthModule>>
+    ) {
+        self.exponential_freq_input = input;
     }
 
     fn fill_sine(&self, buffer: &mut [f32], sample_range: &clock::SampleRange, freq_values: &[f32]) {
@@ -131,14 +146,15 @@ impl Oscillator {
     }
 
     fn fill(
-        &self, buffer: &mut [f32], sample_range: &clock::SampleRange, freq_override_buffer: &[f32]
+        &self, buffer: &mut [f32], sample_range: &clock::SampleRange, linear_freq_mod: &[f32], expo_freq_mod: &[f32]
     ) {
         let buffer_len = buffer.len();
 
         // Compute frequency per sample
         let mut freq_values = vec![self.frequency; buffer_len];
-        for (freq_value, &freq_override_elem) in freq_values.iter_mut().zip(freq_override_buffer.iter()) {
-            *freq_value += freq_override_elem;
+        debug_assert!(freq_values.len() == linear_freq_mod.len() && freq_values.len() == expo_freq_mod.len());
+        for i in 0..freq_values.len() {
+            freq_values[i] = freq_values[i] * expo_freq_mod[i] + linear_freq_mod[i];
         }
 
         match self.waveform {
@@ -155,13 +171,17 @@ impl SynthModule for Oscillator {
     fn fill_output_buffer(&self, data: &mut [f32], output_info: &OutputInfo) {
         let buffer_len = data.len();
 
-        // Get freq override input
         let mut linear_freq_input_buffer = vec![0.0; buffer_len];
         if let Some(linear_freq_input) = &self.linear_freq_input {
             linear_freq_input.fill_output_buffer(linear_freq_input_buffer.as_mut_slice(), output_info);
         };
 
-        self.fill(data, &output_info.current_sample_range, &linear_freq_input_buffer);
+        let mut expo_freq_input_buffer = vec![0.0; buffer_len];
+        if let Some(expo_freq_input) = &self.exponential_freq_input {
+            expo_freq_input.fill_output_buffer(expo_freq_input_buffer.as_mut_slice(), output_info);
+        }
+
+        self.fill(data, &output_info.current_sample_range, &linear_freq_input_buffer, &expo_freq_input_buffer);
     }
 }
 
