@@ -3,6 +3,8 @@
 ## Right Now
 - How MIDI notes are read needs a tune up for sure. Especially since MIDI notes should no longer come out of a module
 - Oscillator needs to not rely on a supplied sample range. The calculation should be immutable and only need to rely on the playback time.
+- Implement noise finally
+- There needs to be a way to get multiple outputs from a single module. Eg. sine and triangle wave from an oscillator at the same time.
 - Tests need to be completely redone I think
 
 ## Docs and comments and cleanup

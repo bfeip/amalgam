@@ -101,7 +101,7 @@ impl Note {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, Hash)]
 pub struct NoteInterval {
     pub note: Note,
     pub start: Option<usize>,

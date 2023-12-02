@@ -3,20 +3,22 @@ use super::super::midi::MidiModuleBase;
 use crate::SynthResult;
 use crate::midi;
 use crate::midi::data::NoteDelta;
+use crate::module::SynthModule;
 use crate::note::{Note, NoteInterval};
 
 use std::collections::HashSet;
 use std::rc::Rc;
 use std::time::Instant;
+use std::cell::{RefCell, Ref};
 
 pub struct MidiNoteOutput {
     midi_source: Rc<MidiModuleBase>,
-    active_notes: HashSet<u8>
+    active_notes: RefCell<HashSet<u8>>
 }
 
 impl MidiNoteOutput {
     pub fn new(midi_source: Rc<MidiModuleBase>) -> Self {
-        let on_notes = HashSet::new();
+        let on_notes = RefCell::new(HashSet::new());
         Self { midi_source, active_notes: on_notes }
     }
 
@@ -32,11 +34,11 @@ impl MidiNoteOutput {
         self.midi_source.read_notes_on_off_delta(n_microseconds, timestamp)
     }
 
-    fn get_active_notes(&self) -> &HashSet<u8> {
-        &self.active_notes
+    fn get_active_notes(&self) -> Ref<HashSet<u8>> {
+        self.active_notes.borrow()
     }
 
-    fn read_note_intervals(&mut self, n_samples: usize, output_info: &OutputInfo) -> Vec<NoteInterval> {
+    fn read_note_intervals(&self, n_samples: usize, output_info: &OutputInfo) -> Vec<NoteInterval> {
         // TODO: This does not take retriggers into account. In a normal synth if a note went off and on again
         // at the same instant the envelope would be retriggered. But that doesn't happen here... 
 
@@ -93,11 +95,12 @@ impl MidiNoteOutput {
                     // The interval will always have `None` as a end sample. We'll
                     // fill it in if we see an end event
                     let note_number = delta.get_note_number();
+                    let mut active_notes = self.active_notes.borrow_mut();
                     debug_assert!(
-                        !self.active_notes.contains(&note_number),
+                        !active_notes.contains(&note_number),
                         "Activated a note we were already playing"
                     );
-                    self.active_notes.insert(note_number);
+                    active_notes.insert(note_number);
 
                     let note = Note::from_midi_note(delta.get_note_number());
                     let interval = NoteInterval::new(note, Some(sample_num), None);
@@ -106,7 +109,7 @@ impl MidiNoteOutput {
                 midi::data::NoteEventType::Off => {
                     // When a note turns off we find its corresponding interval and add a end sample.
                     // This should always find and interval to end. If it doesn't then something is wrong.
-                    let successfully_removed = self.active_notes.remove(&delta.get_note_number());
+                    let successfully_removed = self.active_notes.borrow_mut().remove(&delta.get_note_number());
                     debug_assert!(successfully_removed, "Tried to remove an active note that didn't exist");
 
                     let note = Note::from_midi_note(delta.get_note_number());
@@ -121,6 +124,30 @@ impl MidiNoteOutput {
             }
         }
         intervals
+    }
+}
+
+impl SynthModule for MidiNoteOutput {
+    fn fill_output_buffer(&self, buffer: &mut [f32], output_info: &OutputInfo) {
+        // Put whatever the first interval is as the output until it's done then move on to the second, etc.
+        let fill_with_interval = |buffer: &mut [f32], interval: NoteInterval, current_sample: usize| {
+            let end = interval.end.unwrap_or(buffer.len());
+            let signal_out = interval.note.to_freq(); // Wrong, this needs to be between 0 and 1
+            buffer[current_sample..end].fill(signal_out);
+        };
+
+        let intervals = self.read_note_intervals(buffer.len(), output_info);
+        let mut current_sample = 0_usize;
+        for interval in intervals {
+            if interval.start.unwrap_or(0) <= current_sample {
+                fill_with_interval(buffer, interval, current_sample)
+            }
+            else {
+                buffer[current_sample..interval.start.unwrap()].fill(0.0);
+                fill_with_interval(buffer, interval, interval.start.unwrap());
+            }
+            current_sample = interval.end.unwrap_or(buffer.len());
+        }
     }
 }
 
