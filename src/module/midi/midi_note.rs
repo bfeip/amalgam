@@ -132,7 +132,7 @@ impl SynthModule for MidiNoteOutput {
         // Put whatever the first interval is as the output until it's done then move on to the second, etc.
         let fill_with_interval = |buffer: &mut [f32], interval: NoteInterval, current_sample: usize| {
             let end = interval.end.unwrap_or(buffer.len());
-            let signal_out = interval.note.to_freq(); // Wrong, this needs to be between 0 and 1
+            let signal_out = interval.note.to_freq_normalized();
             buffer[current_sample..end].fill(signal_out);
         };
 

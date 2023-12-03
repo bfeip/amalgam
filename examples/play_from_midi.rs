@@ -15,8 +15,10 @@ fn main() -> SynthResult<()> {
         }
     };
 
-    let midi = Rc::new(module::MidiModuleBase::open(MIDI_PATH)?);
-    let midi_note = Rc::new(module::MidiNoteOutput::new(midi));
+    let mut midi = module::MidiModuleBase::open(MIDI_PATH)?;
+    midi.set_track(1)?;
+    let midi_ptr = Rc::new(midi);
+    let midi_note = Rc::new(module::MidiNoteOutput::new(midi_ptr));
 
     let mut oscillator = module::Oscillator::new();
     oscillator.set_exponential_freq_input(Some(midi_note));

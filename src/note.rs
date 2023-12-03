@@ -16,6 +16,9 @@ pub const FREQ_G_SHARP: f32 = 830.61;
 const MIDI_NOTE_BASE_OCTAVE: i8 = -1;
 const MIDI_NOTE_BASE_TONE_OFFSET: u8 = 3; // numeric offset from A i.e. 3 is C
 
+const NORMALIZATION_FREQ: f32 = FREQ_A * 16.0;
+const NORMALIZATION_OCTAVES: f32 = 8.0;
+
 /// Represents the notes within an octave
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Hash)]
 pub enum Tone {
@@ -98,6 +101,16 @@ impl Note {
         // E.g. A4 shifted down one octave is 440 * (2^-1) 
         let freq_shift_degree = 2_f32.powi(octave_shift as i32);
         default_freq * freq_shift_degree
+    }
+
+    /// A frequency squished to a value between 0.0 and 1.0 with NORMALIZATION_FREQ representing 1.0
+    pub fn to_freq_normalized(&self) -> f32 {
+        let freq = self.to_freq();
+        (freq / NORMALIZATION_FREQ).min(1.0)
+    }
+
+    pub fn normalized_to_coefficient(normalized: f32) -> f32 {
+        normalized * NORMALIZATION_OCTAVES
     }
 }
 

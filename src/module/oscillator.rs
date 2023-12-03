@@ -2,6 +2,7 @@ use std::rc::Rc;
 
 use crate::note;
 use crate::clock;
+use crate::note::Note;
 use super::{SynthModule, OutputInfo};
 
 const PI: f32 = std::f64::consts::PI as f32;
@@ -154,7 +155,8 @@ impl Oscillator {
         let mut freq_values = vec![self.frequency; buffer_len];
         debug_assert!(freq_values.len() == linear_freq_mod.len() && freq_values.len() == expo_freq_mod.len());
         for i in 0..freq_values.len() {
-            freq_values[i] = freq_values[i] * expo_freq_mod[i] + linear_freq_mod[i];
+            let expo_mod = Note::normalized_to_coefficient(expo_freq_mod[i]);
+            freq_values[i] = freq_values[i] * expo_mod + linear_freq_mod[i];
         }
 
         match self.waveform {
