@@ -12,8 +12,7 @@ impl NoiseGenerator {
 
     pub fn get<T>(&self) -> T 
     where rand::distributions::Standard: rand::distributions::Distribution<T> {
-        todo!();
-        //rand::random()
+        rand::random()
     }
 }
 
