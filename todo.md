@@ -2,7 +2,6 @@
 
 ## Right Now
 - Oscillator needs to not rely on a supplied sample range. The calculation should be immutable and only need to rely on the playback time.
-- midi freq output needs to be normalized to -1.0 to 1.0
 - Oscillator triangle output
 - Implement noise finally
 - Tests need to be completely redone I think
