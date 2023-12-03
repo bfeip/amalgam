@@ -1,5 +1,8 @@
-use super::common::{SignalOutputModule, OutputInfo, EdgeDetection, Connectable};
-use super::error::*;
+use std::rc::Rc;
+use std::cell::Cell;
+
+use super::{SynthModule, OutputInfo, EdgeDetection};
+use crate::{SynthError, SynthResult};
 
 const DEFAULT_STEP_INFO: StepInfo = StepInfo {
     kind: SequencerStepKind::Normal,
@@ -24,11 +27,11 @@ pub struct StepInfo {
 // TODO: Sequence direction e.g. forward, backward, forward/backward
 pub struct Sequencer {
     steps: Vec<StepInfo>,
-    playing: bool,
+    playing: Cell<bool>,
     cycle: bool,
-    current_step: usize,
+    current_step: Cell<usize>,
 
-    clock: Connectable<dyn SignalOutputModule>,
+    clock: Option<Rc<dyn SynthModule>>,
     edge_detection: EdgeDetection,
     edge_tolerance: f32
 }
@@ -36,27 +39,24 @@ pub struct Sequencer {
 impl Sequencer {
     pub fn new() -> Self {
         let steps = Vec::new();
-        let playing = false;
+        let playing = Cell::new(false);
         let cycle = true;
-        let current_step = 0_usize;
+        let current_step = Cell::new(0_usize);
 
-        let clock = Connectable::empty();
+        let clock = None;
         let edge_detection = EdgeDetection::Falling;
         let edge_tolerance = 0.8_f32;
         Self { steps, playing, cycle, current_step, clock, edge_detection, edge_tolerance }
     }
 
     pub fn with_steps(step_count: usize) -> Self {
-        let mut steps = Vec::with_capacity(step_count);
-        for _ in 0..step_count {
-            steps.push(DEFAULT_STEP_INFO);
-        }
+        let steps = vec![DEFAULT_STEP_INFO; step_count];
 
-        let playing = false;
+        let playing = Cell::new(false);
         let cycle = true;
-        let current_step = 0_usize;
+        let current_step = Cell::new(0_usize);
 
-        let clock = Connectable::empty();
+        let clock = None;
         let edge_detection = EdgeDetection::Falling;
         let edge_tolerance = 0.8_f32;
         Self { steps, playing, cycle, current_step, clock, edge_detection, edge_tolerance }
@@ -79,31 +79,31 @@ impl Sequencer {
     }
 
     pub fn get_current_step_info(&self) -> Option<&StepInfo> {
-        self.steps.get(self.current_step)
+        self.steps.get(self.current_step.get())
     }
 
-    pub fn set_step_info(&mut self, step_index: usize, step_info: &StepInfo) -> ModuleResult<()> {
+    pub fn set_step_info(&mut self, step_index: usize, step_info: &StepInfo) -> SynthResult<()> {
         match self.steps.get_mut(step_index) {
             Some(step) => *step = *step_info,
             None => {
                 let msg = "Failed to set sequencer step info because index was out of bounds";
-                return Err(ModuleError::new(msg));
+                return Err(SynthError::new(msg));
             }
         }
         Ok(())
     }
 
-    pub fn remove_step(&mut self, step_index: usize) -> ModuleResult<()> {
+    pub fn remove_step(&mut self, step_index: usize) -> SynthResult<()> {
         if step_index > self.steps.len() {
             let msg = "Failed to remove sequencer step because index is out of bounds";
-            return Err(ModuleError::new(msg));
+            return Err(SynthError::new(msg));
         }
 
         self.steps.remove(step_index);
         Ok(())
     }
 
-    pub fn increment_step(&mut self, force: bool) {
+    pub fn increment_step(&self, force: bool) {
         self.increment_step_body(force, true);
     }
 
@@ -111,38 +111,38 @@ impl Sequencer {
     // parameter of needs_skip_check to note weather we need to check for the 
     // case where all steps are skip so we don't have to iterate every step
     // every time there's a skip step.
-    fn increment_step_body(&mut self, force: bool, needs_skip_check: bool) {
+    fn increment_step_body(&self, force: bool, needs_skip_check: bool) {
         let sequence_length = self.steps.len();
         if sequence_length == 0 {
             // There are no steps, bail
             return;
         }
-        if !force && !self.cycle && self.current_step == sequence_length - 1 {
+        if !force && !self.cycle && self.current_step.get() == sequence_length - 1 {
             // We're on the last step and we're not cycling and it's not being forced, do nothing
             return;
         }
 
         // Set us to the next step
-        if self.steps[self.current_step].kind == SequencerStepKind::Repeat {
-            self.current_step = 0;
+        if self.steps[self.current_step.get()].kind == SequencerStepKind::Repeat {
+            self.current_step.set(0);
         } else {
-            self.current_step += 1;
-            if self.current_step % sequence_length == 0 {
+            self.current_step.set(self.current_step.get() + 1);
+            if self.current_step.get() % sequence_length == 0 {
                 if !self.cycle {
-                    self.playing = false;
-                    self.current_step -= 1;
+                    self.playing.set(false);
+                    self.current_step.set(self.current_step.get() - 1);
                 }
                 else {
-                    self.current_step = 0; // return to 0 even if not cycle
+                    self.current_step.set(0); // return to 0 even if not cycle
                 }
             }
         }
 
         // Check if the step we're on now is a skipped step. If it is, recurse
-        if self.steps[self.current_step].kind == SequencerStepKind::Skip {
+        if self.steps[self.current_step.get()].kind == SequencerStepKind::Skip {
             // If every step is skip just stop
             if needs_skip_check && self.all_steps_skip() {
-                self.current_step = 0;
+                self.current_step.set(0);
                 return;
             }
             self.increment_step_body(force, false);
@@ -155,18 +155,18 @@ impl Sequencer {
                 return false;
             }
         }
-        return true; // Also considered true if there are no steps
+        true // Also considered true if there are no steps
     }
 
-    pub fn start(&mut self) {
-        self.playing = true;
+    pub fn start(&self) {
+        self.playing.set(true);
     }
 
-    pub fn stop(&mut self) {
-        self.playing = false;
+    pub fn stop(&self) {
+        self.playing.set(false);
     }
 
-    pub fn set_clock(&mut self, clock: Connectable<dyn SignalOutputModule>) {
+    pub fn set_clock(&mut self, clock: Option<Rc<dyn SynthModule>>) {
         self.clock = clock;
     }
 
@@ -201,10 +201,14 @@ impl Sequencer {
     pub fn len(&self) -> usize {
         self.steps.len()
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.steps.len() == 0
+    }
 }
 
-impl SignalOutputModule for Sequencer {
-    fn fill_output_buffer(&mut self, data: &mut [f32], output_info: &OutputInfo) {
+impl SynthModule for Sequencer {
+    fn fill_output_buffer(&self, data: &mut [f32], output_info: &OutputInfo) {
         let data_size = data.len();
 
         // Closure to fill the actual data buffer
@@ -225,12 +229,12 @@ impl SignalOutputModule for Sequencer {
             }
         };
 
-        if self.playing {
+        if self.playing.get() {
             // We are playing which means which step we are on is subject to change
             let mut clock_signals = Vec::with_capacity(data_size);
             clock_signals.resize(data_size, 0_f32);
-            if let Some(mut clock) = self.clock.get() {
-                clock.fill_output_buffer(&mut clock_signals, output_info)
+            if let Some(clock) = &self.clock {
+                clock.fill_output_buffer(&mut clock_signals, output_info);
             }
 
             let mut data_filled = 0_usize;

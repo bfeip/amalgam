@@ -1,24 +1,27 @@
-use super::common::*;
+use std::rc::Rc;
+use std::cell::Cell;
+
+use super::{SynthModule, OutputInfo};
 
 const MICROSECONDS_PER_SECOND: f32 = 1_000_000.0;
 
 pub struct Compressor {
-    signal_in: Connectable<dyn SignalOutputModule>,
+    signal_in: Option<Rc<dyn SynthModule>>,
     slew_time: f32, // microseconds
-    compression_factor: f32,
+    compression_factor: Cell<f32>,
     over_compression: f32, // A boost to the initial compression factor
 }
 
 impl Compressor {
     pub fn new() -> Self {
-        let signal_in = Connectable::empty();
+        let signal_in = None;
         let slew_time = MICROSECONDS_PER_SECOND;
-        let compression_factor = 1.0;
+        let compression_factor = Cell::new(1.0);
         let over_compression = 0.1;
         Compressor { signal_in, slew_time, compression_factor, over_compression }
     }
 
-    pub fn set_signal_in(&mut self, input: Connectable<dyn SignalOutputModule>) {
+    pub fn set_signal_in(&mut self, input: Option<Rc<dyn SynthModule>>) {
         self.signal_in = input;
     }
 
@@ -31,25 +34,21 @@ impl Compressor {
     }
 }
 
-impl SignalOutputModule for Compressor {
-    fn fill_output_buffer(&mut self, buffer: &mut [f32], output_info: &OutputInfo) {
+impl SynthModule for Compressor {
+    fn fill_output_buffer(&self, buffer: &mut [f32], output_info: &OutputInfo) {
         let buffer_len = buffer.len();
 
         // Get signal from input
         let mut signal = vec![0.0; buffer_len];
-        let mut input_lock = match self.signal_in.get() {
-            Some(input_lock) => input_lock,
-            None => {
-                // No input, fill with 0.0
-                buffer.fill(0.0);
-                return;
-            }
-        };
+        if let Some(signal_in) = &self.signal_in {
+            signal_in.fill_output_buffer(&mut signal, output_info)
+        }
+        else {
+            buffer.fill(0.0);
+            return;
+        }
 
-        input_lock.fill_output_buffer(&mut signal, output_info);
-        drop(input_lock);
-
-        let mut compression_factor = self.compression_factor;
+        let mut compression_factor = self.compression_factor.get();
         for i in 0..buffer_len {
             if signal[i] < 1.0 {
                 // Set a new compression factor if we need to
@@ -63,6 +62,6 @@ impl SignalOutputModule for Compressor {
             }
             buffer[i] = signal[i] / compression_factor
         }
-        self.compression_factor = compression_factor;
+        self.compression_factor.set(compression_factor);
     }
 }

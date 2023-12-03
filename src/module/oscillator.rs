@@ -1,6 +1,9 @@
+use std::rc::Rc;
+
 use crate::note;
 use crate::clock;
-use super::common::*;
+use crate::note::Note;
+use super::{SynthModule, OutputInfo};
 
 const PI: f32 = std::f64::consts::PI as f32;
 const TAU: f32 = PI * 2.0;
@@ -25,7 +28,10 @@ pub struct Oscillator {
     frequency: f32,
     /// Width of the pulse. Only used for pulse waveforms. 50% is square, 0% and 100% are silent
     pulse_width: f32,
-    freq_override_input: Connectable<dyn OptionalSignalOutputModule>
+    /// Linear freq modulation input
+    linear_freq_input: Option<Rc<dyn SynthModule>>,
+    /// Exponential freq modulation input
+    exponential_freq_input: Option<Rc<dyn SynthModule>>,
 }
 
 impl Oscillator {
@@ -34,8 +40,15 @@ impl Oscillator {
         let waveform = Waveform::Sine;
         let frequency = note::FREQ_C;
         let pulse_width = 0.5;
-        let freq_override_input = Connectable::empty();
-        Oscillator { waveform, frequency, pulse_width, freq_override_input }
+        let linear_freq_input = None;
+        let exponential_freq_input = None;
+        Oscillator {
+            waveform,
+            frequency,
+            pulse_width,
+            linear_freq_input,
+            exponential_freq_input
+        }
     }
 
     pub fn set_waveform(&mut self, waveform: Waveform) {
@@ -62,10 +75,16 @@ impl Oscillator {
         self.pulse_width
     }
 
-    pub fn set_frequency_override_input(
-        &mut self, override_input: Connectable<dyn OptionalSignalOutputModule>
+    pub fn set_linear_freq_input(
+        &mut self, input: Option<Rc<dyn SynthModule>>
     ) {
-        self.freq_override_input = override_input;
+        self.linear_freq_input = input;
+    }
+
+    pub fn set_exponential_freq_input(
+        &mut self, input: Option<Rc<dyn SynthModule>>
+    ) {
+        self.exponential_freq_input = input;
     }
 
     fn fill_sine(&self, buffer: &mut [f32], sample_range: &clock::SampleRange, freq_values: &[f32]) {
@@ -128,16 +147,16 @@ impl Oscillator {
     }
 
     fn fill(
-        &self, buffer: &mut [f32], sample_range: &clock::SampleRange, freq_override_buffer: &[Option<f32>]
+        &self, buffer: &mut [f32], sample_range: &clock::SampleRange, linear_freq_mod: &[f32], expo_freq_mod: &[f32]
     ) {
         let buffer_len = buffer.len();
 
         // Compute frequency per sample
         let mut freq_values = vec![self.frequency; buffer_len];
-        for (freq_value, &freq_override_elem) in freq_values.iter_mut().zip(freq_override_buffer.iter()) {
-            if freq_override_elem.is_some() {
-                *freq_value = freq_override_elem.unwrap();
-            }
+        debug_assert!(freq_values.len() == linear_freq_mod.len() && freq_values.len() == expo_freq_mod.len());
+        for i in 0..freq_values.len() {
+            let expo_mod = Note::normalized_to_coefficient(expo_freq_mod[i]);
+            freq_values[i] = freq_values[i] * expo_mod + linear_freq_mod[i];
         }
 
         match self.waveform {
@@ -150,17 +169,21 @@ impl Oscillator {
     }
 }
 
-impl SignalOutputModule for Oscillator {
-    fn fill_output_buffer(&mut self, data: &mut [f32], output_info: &OutputInfo) {
+impl SynthModule for Oscillator {
+    fn fill_output_buffer(&self, data: &mut [f32], output_info: &OutputInfo) {
         let buffer_len = data.len();
 
-        // Get freq override input
-        let mut freq_override_buffer = vec![None; buffer_len];
-        if let Some(mut freq_override_module) = self.freq_override_input.get() {
-            freq_override_module.fill_optional_output_buffer(freq_override_buffer.as_mut_slice(), output_info);
+        let mut linear_freq_input_buffer = vec![0.0; buffer_len];
+        if let Some(linear_freq_input) = &self.linear_freq_input {
+            linear_freq_input.fill_output_buffer(linear_freq_input_buffer.as_mut_slice(), output_info);
         };
 
-        self.fill(data, &output_info.current_sample_range, &freq_override_buffer);
+        let mut expo_freq_input_buffer = vec![0.0; buffer_len];
+        if let Some(expo_freq_input) = &self.exponential_freq_input {
+            expo_freq_input.fill_output_buffer(expo_freq_input_buffer.as_mut_slice(), output_info);
+        }
+
+        self.fill(data, &output_info.current_sample_range, &linear_freq_input_buffer, &expo_freq_input_buffer);
     }
 }
 

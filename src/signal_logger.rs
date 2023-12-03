@@ -24,11 +24,10 @@ impl SignalLogger {
             None => return Ok(())
         };
         let source_str_bytes = source.as_bytes();
-        let signal_str_bytes: Vec<u8> = signal.iter().map(|f| {
+        let signal_str_bytes: Vec<u8> = signal.iter().flat_map(|f| {
             let float_string = " ".to_owned() + &f.to_string();
             float_string.into_bytes()
         })
-        .flatten()
         .collect();
 
         out.write_all(source_str_bytes)?;

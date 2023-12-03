@@ -2,14 +2,14 @@
 // https://web.archive.org/web/20141227205754/http://www.sonicspot.com:80/guide/midifiles.html
 #![macro_use]
 
-use super::error::*;
+use crate::{SynthError, SynthResult};
 use event::Event;
 
 macro_rules! read_with_eof_check {
     ($midiFileStream:expr, $buffer:expr) => {
         if let Err(err) = $midiFileStream.read_exact($buffer) {
             let msg = format!("Unexpected EOF: {}", err);
-            return Err(MidiError::new(&msg));
+            return Err(SynthError::new(&msg));
         }
     };
 }
@@ -30,12 +30,12 @@ impl MidiData {
         Self { header, tracks }
     }
 
-    pub fn from_file<P: AsRef<std::path::Path>>(midi_path: P) -> MidiResult<Self> {
+    pub fn from_file<P: AsRef<std::path::Path>>(midi_path: P) -> SynthResult<Self> {
         let midi_file = match File::open(&midi_path) {
             Ok(midi_file) => midi_file,
             Err(err) => {
                 let msg = format!("Failed to open MIDI file at {} for reading: {}", midi_path.as_ref().display(), err);
-                return Err(MidiError::new(&msg));
+                return Err(SynthError::new(&msg));
             }
         };
         let mut midi_file_stream = io::BufReader::new(midi_file);
@@ -44,7 +44,7 @@ impl MidiData {
             Ok(header) => header,
             Err(err) => {
                 let msg = format!("Failed to parse MIDI header: {}", err);
-                return Err(MidiError::new(&msg));
+                return Err(SynthError::new(&msg));
             }
         };
         let mut tracks = Vec::with_capacity(header.n_tracks);
@@ -53,7 +53,7 @@ impl MidiData {
                 Ok(track) => track,
                 Err(err) => {
                     let msg = format!("Failed to parse MIDI track: {}", err);
-                    return Err(MidiError::new(&msg));
+                    return Err(SynthError::new(&msg));
                 }
             };
             tracks.push(track);
@@ -99,7 +99,7 @@ impl HeaderChunk {
         HeaderChunk { format, n_tracks, time_division }
     }
 
-    fn from_bytes(format_bytes: [u8; 2], n_tracks_bytes: [u8; 2], time_division_bytes: [u8; 2]) -> MidiResult<Self> {
+    fn from_bytes(format_bytes: [u8; 2], n_tracks_bytes: [u8; 2], time_division_bytes: [u8; 2]) -> SynthResult<Self> {
         let format = match format_bytes[1] {
             0 => Format::UniTrack,
             1 => Format::MultiTrack,
@@ -107,7 +107,7 @@ impl HeaderChunk {
             _ => {
                 let format_u16 = u16::from_be_bytes(format_bytes);
                 let msg = format!("Got unknown MIDI format {:#06x}", format_u16);
-                return Err(MidiError::new(&msg));
+                return Err(SynthError::new(&msg));
             }
         };
 
@@ -116,21 +116,21 @@ impl HeaderChunk {
         let time_division_u16 = u16::from_be_bytes(time_division_bytes);
         let time_division = match time_division_u16 & 0x8000 {
             0x8000 => {
-                let frames_per_second = (time_division_u16 >> 8) as u8 & 0x7F as u8;
+                let frames_per_second = (time_division_u16 >> 8) as u8 & 0x7F_u8;
                 let ticks_per_frame = (time_division_u16 & 0xFF) as u8;
                 TimeDivision::FramesPerSecond { frames_per_second, ticks_per_frame}
             },
             0x0000 => TimeDivision::TicksPerBeat(time_division_u16),
             _ => {
                 let msg = format!("Unknown time division {:#06x}", time_division_u16);
-                return Err(MidiError::new(&msg));
+                return Err(SynthError::new(&msg));
             }
         };
 
         Ok(HeaderChunk { format, n_tracks, time_division })
     }
 
-    fn parse<T: io::Read>(mut midi_stream: T) -> MidiResult<Self> {
+    fn parse<T: io::Read>(mut midi_stream: T) -> SynthResult<Self> {
         const EXPECTED_ID: &[u8] = "MThd".as_bytes();
         const EXPECTED_SIZE: u32 = 6;
     
@@ -152,11 +152,11 @@ impl HeaderChunk {
                         "Expected main header ID to be {}. Got an invalid UTF-8 with value {:#010x}: {}",
                         expected_id_str, id_value, err
                     );
-                    return Err(MidiError::new(&msg));
+                    return Err(SynthError::new(&msg));
                 }
             };
             let msg = format!("Expected main header ID to be {} got {}", expected_id_str, id_str);
-            return Err(MidiError::new(&msg))
+            return Err(SynthError::new(&msg))
         }
     
         // The size of the main header should always be 6... Just check that it is and carry on
@@ -164,7 +164,7 @@ impl HeaderChunk {
         let size_u32 = u32::from_be_bytes(size);
         if size_u32 != EXPECTED_SIZE {
             let msg = format!("Expected main header size to be {}. Got {}", EXPECTED_SIZE, size_u32);
-            return Err(MidiError::new(&msg)); 
+            return Err(SynthError::new(&msg)); 
         }
     
         read_with_eof_check!(midi_stream, &mut format);
@@ -194,7 +194,7 @@ impl TrackChunk {
         TrackChunk { events }
     }
 
-    fn parse<T: io::Read + io::Seek>(mut midi_stream: T) -> MidiResult<Self> {
+    fn parse<T: io::Read + io::Seek>(mut midi_stream: T) -> SynthResult<Self> {
         const EXPECTED_ID: &[u8] = "MTrk".as_bytes();
         
         let mut id_bytes: [u8; 4] = [0; 4];
@@ -212,11 +212,11 @@ impl TrackChunk {
                         "Expected main header ID to be {}. Got an invalid UTF-8 with value {:#010x}: {}",
                         expected_id_str, id_value, err
                     );
-                    return Err(MidiError::new(&msg));
+                    return Err(SynthError::new(&msg));
                 }
             };
             let msg = format!("Expected main header ID to be {} got {}", expected_id_str, id_str);
-            return Err(MidiError::new(&msg));
+            return Err(SynthError::new(&msg));
         }
         #[cfg(feature = "verbose_midi")]
         {
@@ -245,7 +245,7 @@ impl TrackChunk {
                 Ok(event) => event,
                 Err(err) => {
                     let msg = format!("Failed to parse events: {}", err);
-                    return Err(MidiError::new(&msg));
+                    return Err(SynthError::new(&msg));
                 }
             };
             #[cfg(feature = "verbose_midi")]
@@ -256,7 +256,7 @@ impl TrackChunk {
         }
         if midi_stream.seek(HERE).unwrap() - start_stream_position > size {
             let msg = "Read more than size of track";
-            return Err(MidiError::new(msg));
+            return Err(SynthError::new(msg));
         }
         let track_chunk = TrackChunk::new(events);
         #[cfg(feature = "verbose_midi")]
@@ -271,7 +271,7 @@ impl TrackChunk {
     }
 }
 
-fn parse_variable_length<T: io::Read>(mut midi_stream: T) -> MidiResult<usize> {
+fn parse_variable_length<T: io::Read>(mut midi_stream: T) -> SynthResult<usize> {
     let mut byte = [0x80_u8; 1];
     let mut bytes = Vec::new();
     while byte[0] & 0x80 == 0x80 {
@@ -282,7 +282,7 @@ fn parse_variable_length<T: io::Read>(mut midi_stream: T) -> MidiResult<usize> {
 
     if bytes.len() > 7 {
         let msg = "Length of variable field exceeds what I expected";
-        return Err(MidiError::new(msg));
+        return Err(SynthError::new(msg));
     }
 
     let n_bytes = bytes.len();
@@ -295,20 +295,19 @@ fn parse_variable_length<T: io::Read>(mut midi_stream: T) -> MidiResult<usize> {
 
     #[cfg(feature = "verbose_midi")]
     {
-        println!("Parsed MIDI variable langth field with bytes {:?} and value {:?}", bytes, total_value);
+        println!("Parsed MIDI variable length field with bytes {:?} and value {:?}", bytes, total_value);
     }
     Ok(total_value)
 }
 
-fn parse_string<T: io::Read>(mut midi_stream: T, size: usize) -> MidiResult<String> {
-    let mut byte_array = Vec::with_capacity(size);
-    byte_array.resize(size, 0_u8);
+fn parse_string<T: io::Read>(mut midi_stream: T, size: usize) -> SynthResult<String> {
+    let mut byte_array = vec![0; size];
     read_with_eof_check!(midi_stream, &mut byte_array);
     let string = match String::from_utf8(byte_array) {
         Ok(string) => string,
         Err(err) => {
             let msg = format!("Failed to parse string with size {}: {}", size, err);
-            return Err(MidiError::new(&msg));
+            return Err(SynthError::new(&msg));
         }
     };
     #[cfg(feature = "verbose_midi")]
@@ -318,9 +317,9 @@ fn parse_string<T: io::Read>(mut midi_stream: T, size: usize) -> MidiResult<Stri
     Ok(string)
 }
 
-fn throw_unexpected_eof(err: io::Error) -> MidiResult<()> {
+fn throw_unexpected_eof(err: io::Error) -> SynthResult<()> {
     let msg = format!("Unexpected EOF: {}", err);
-    return Err(MidiError::new(&msg));
+    Err(SynthError::new(&msg))
 }
 
 #[cfg(test)]

@@ -12,7 +12,7 @@ mod midi;
 pub mod note;
 mod clock;
 pub mod module;
-pub mod output;
+mod output;
 pub mod synth;
 
 pub use crate::synth::Synth;

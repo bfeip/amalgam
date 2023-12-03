@@ -1,4 +1,7 @@
-use super::common::{SignalOutputModule, OutputInfo, Connectable};
+use std::rc::Rc;
+use std::cell::Cell;
+
+use super::{SynthModule, OutputInfo};
 
 #[derive(Debug, Clone, Copy, Hash)]
 enum Adsr {
@@ -17,12 +20,12 @@ pub struct Envelope {
     sustain_level: f32,
     release_time: f32,
 
-    stage: Adsr,
-    previous_value: f32,
+    stage: Cell<Adsr>,
+    previous_value: Cell<f32>,
 
-    trigger: Connectable<dyn SignalOutputModule>,
+    trigger: Option<Rc<dyn SynthModule>>,
     trigger_tolerance: f32, // Minimum value at which envelope is triggered
-    triggered : bool
+    triggered: Cell<bool>
 }
 
 impl Envelope {
@@ -32,12 +35,12 @@ impl Envelope {
         let sustain_level = 1.0;
         let release_time = 0.0;
 
-        let stage = Adsr::Done;
-        let previous_value = 0.0;
+        let stage = Cell::new(Adsr::Done);
+        let previous_value = Cell::new(0.0);
 
-        let trigger = Connectable::empty();
+        let trigger = None;
         let trigger_tolerance = 0.5;
-        let triggered = false;
+        let triggered = Cell::new(false);
 
         Self { 
             attack_time, decay_time, sustain_level, release_time,
@@ -77,7 +80,7 @@ impl Envelope {
         self.release_time
     }
 
-    pub fn set_trigger(&mut self, trigger: Connectable<dyn SignalOutputModule>) {
+    pub fn set_trigger(&mut self, trigger: Option<Rc<dyn SynthModule>>) {
         self.trigger = trigger;
     }
 
@@ -89,14 +92,14 @@ impl Envelope {
         self.trigger_tolerance
     }
 
-    pub fn trigger(&mut self) {
-        self.stage = Adsr::Attack;
-        self.triggered = true;
+    pub fn trigger(&self) {
+        self.stage.set(Adsr::Attack);
+        self.triggered.set(true);
     }
 
-    pub fn release(&mut self) {
-        self.stage = Adsr::Release;
-        self.triggered = false;
+    pub fn release(&self) {
+        self.stage.set(Adsr::Release);
+        self.triggered.set(false);
     }
 
     pub fn copy_state_from(&mut self, other: &Self) {
@@ -108,60 +111,60 @@ impl Envelope {
         self.trigger_tolerance = other.trigger_tolerance;
     }
 
-    fn get_attack(&mut self, sample_rate: usize) -> f32 {
+    fn get_attack(&self, sample_rate: usize) -> f32 {
         let time_in_milliseconds = 1000.0 / sample_rate as f32;
         let increase_factor = time_in_milliseconds / self.attack_time;
-        let envelope_value = self.previous_value + increase_factor;
+        let envelope_value = self.previous_value.get() + increase_factor;
         debug_assert!(envelope_value.is_finite());
         if envelope_value >= 1.0 {
             if self.decay_time > 0.0 && self.sustain_level != 1.0 {
                 // There is a decay stage
-                self.stage = Adsr::Decay;
-                self.previous_value = 1.0;
+                self.stage.set(Adsr::Decay);
+                self.previous_value.set(1.0);
                 return 1.0;
             }
             else {
                 // There is no decay stage
-                self.stage = Adsr::Sustain;
-                self.previous_value = self.sustain_level;
+                self.stage.set(Adsr::Sustain);
+                self.previous_value.set(self.sustain_level);
                 return 1.0
             }
             
         }
-        self.previous_value = envelope_value;
+        self.previous_value.set(envelope_value);
         envelope_value
     }
 
-    fn get_decay(&mut self, sample_rate: usize) -> f32 {
+    fn get_decay(&self, sample_rate: usize) -> f32 {
         let time_in_milliseconds = 1000.0 / sample_rate as f32;
         let decrease_factor = time_in_milliseconds * (1.0 - self.sustain_level) / self.decay_time;
-        let envelope_value = self.previous_value - decrease_factor;
+        let envelope_value = self.previous_value.get() - decrease_factor;
         debug_assert!(envelope_value.is_finite());
         if envelope_value <= self.sustain_level {
-            self.stage = Adsr::Sustain;
-            self.previous_value = self.sustain_level;
+            self.stage.set(Adsr::Sustain);
+            self.previous_value.set(self.sustain_level);
             return self.sustain_level;
         }
-        self.previous_value = envelope_value;
+        self.previous_value.set(envelope_value);
         envelope_value
     }
 
-    fn get_release(&mut self, sample_rate: usize) -> f32 {
+    fn get_release(&self, sample_rate: usize) -> f32 {
         let time_in_milliseconds = 1000.0 / sample_rate as f32;
         let decrease_factor = time_in_milliseconds / self.release_time;
-        let envelope_value = self.previous_value - decrease_factor;
+        let envelope_value = self.previous_value.get() - decrease_factor;
         debug_assert!(envelope_value.is_finite());
         if envelope_value <= 0.0 {
-            self.stage = Adsr::Done;
-            self.previous_value = 0.0;
+            self.stage.set(Adsr::Done);
+            self.previous_value.set(0.0);
             return 0.0;
         }
-        self.previous_value = envelope_value;
+        self.previous_value.set(envelope_value);
         envelope_value
     }
 
-    pub fn get(&mut self, sample_rate: usize) -> f32 {
-        match self.stage {
+    pub fn get(&self, sample_rate: usize) -> f32 {
+        match self.stage.get() {
             Adsr::Attack  => self.get_attack(sample_rate),
             Adsr::Decay   => self.get_decay(sample_rate),
             Adsr::Sustain => self.sustain_level,
@@ -171,26 +174,23 @@ impl Envelope {
     }
 }
 
-impl SignalOutputModule for Envelope {
-    fn fill_output_buffer(&mut self, data: &mut [f32], output_info: &OutputInfo) {
+impl SynthModule for Envelope {
+    fn fill_output_buffer(&self, data: &mut [f32], output_info: &OutputInfo) {
         let data_size = data.len();
         let mut trigger_data = Vec::with_capacity(data_size);
         trigger_data.resize(data_size, 0.0);
 
-        {
-            let mut trigger_lock = match self.trigger.get() {
-                Some(trigger_lock) => trigger_lock,
-                None => {
-                    data.fill(0.0);
-                    return;
-                }
-            };
-            trigger_lock.fill_output_buffer(&mut trigger_data, output_info);
+        if let Some(trigger) = &self.trigger {
+            trigger.fill_output_buffer(&mut trigger_data, output_info);
+        }
+        else {
+            data.fill(0.0);
+            return;
         }
 
         for (i, datum) in data.iter_mut().enumerate() {
             let triggered = trigger_data[i] > self.trigger_tolerance;
-            if triggered != self.triggered {
+            if triggered != self.triggered.get() {
                 // Triggered state has changed. We should either start attack or release
                 if triggered {
                     self.trigger();
@@ -211,7 +211,7 @@ mod tests {
     use crate::clock;
 
     struct ConstantTrigger;
-    impl SignalOutputModule for ConstantTrigger {
+    impl SynthModule for ConstantTrigger {
         fn fill_output_buffer(&mut self, data: &mut [f32], _output_info: &OutputInfo) {
             for datum in data.iter_mut() {
                 *datum = 1.0;
@@ -220,7 +220,7 @@ mod tests {
     }
 
     struct SplitTrigger;
-    impl SignalOutputModule for SplitTrigger {
+    impl SynthModule for SplitTrigger {
         fn fill_output_buffer(&mut self, data: &mut [f32], _output_info: &OutputInfo) {
             let (trigger_data, untrigger_data) = data.split_at_mut(data.len() / 2);
             for datum in trigger_data.iter_mut() {

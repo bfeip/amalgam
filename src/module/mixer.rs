@@ -1,25 +1,27 @@
+use std::rc::Rc;
+
 use crate::prelude::*;
-use super::common::{SignalOutputModule, OutputInfo, CompressionMode, compress_audio, Connectable};
-use super::error::*;
+use crate::{SynthError, SynthResult};
+use super::{SynthModule, OutputInfo, CompressionMode, compress_audio};
 
 pub struct MixerInput {
-    input: Connectable<dyn SignalOutputModule>,
+    input: Option<Rc<dyn SynthModule>>,
     level: f32
 }
 
 impl MixerInput {
     pub fn new() -> Self {
-        let input = Connectable::empty();
+        let input = None;
         let level = 1_f32;
         Self { input, level }
     }
 
-    pub fn with_input(input: Connectable<dyn SignalOutputModule>) -> Self {
+    pub fn with_input(input: Option<Rc<dyn SynthModule>>) -> Self {
         let level = 1_f32;
         Self { input, level }
     }
 
-    pub fn set_input(&mut self, input: Connectable<dyn SignalOutputModule>) {
+    pub fn set_input(&mut self, input: Option<Rc<dyn SynthModule>>) {
         self.input = input;
     }
 
@@ -53,10 +55,10 @@ impl Mixer {
         self.inputs.push(input);
     }
 
-    pub fn remove_input(&mut self, input_index: usize) -> ModuleResult<()> {
+    pub fn remove_input(&mut self, input_index: usize) -> SynthResult<()> {
         if input_index > self.inputs.len() {
             let msg = "Tried to remove element from mixer that was out of bounds";
-            return Err(ModuleError::new(msg));
+            return Err(SynthError::new(msg));
         }
         self.inputs.remove(input_index);
         Ok(())
@@ -71,8 +73,8 @@ impl Mixer {
     }
 }
 
-impl SignalOutputModule for Mixer {
-    fn fill_output_buffer(&mut self, data: &mut [f32], output_info: &OutputInfo) {
+impl SynthModule for Mixer {
+    fn fill_output_buffer(&self, data: &mut [f32], output_info: &OutputInfo) {
         let data_len = data.len();
         let input_len = self.inputs.len();
 
@@ -84,9 +86,13 @@ impl SignalOutputModule for Mixer {
         let mut data_buffer = Vec::with_capacity(data_len);
         data_buffer.resize(data_len, 0.0);
         for i in 0..input_len {
-            let input = &mut self.inputs[i];
-            let mut signal_input_lock = input.input.get().unwrap();
-            signal_input_lock.fill_output_buffer(&mut data_buffer, output_info);
+            let input = &self.inputs[i];
+            if let Some(signal_input) = &input.input {
+                signal_input.fill_output_buffer(&mut data_buffer, output_info);
+            }
+            else {
+                continue;
+            }
 
             // Apply the level if we need to
             if !float_eq(input.level, 1.0, 0.000001) {
@@ -96,7 +102,7 @@ impl SignalOutputModule for Mixer {
             }
             
             for i in 0..data_len {
-                *&mut data[i] += data_buffer[i];
+                data[i] += data_buffer[i];
             }
         }
 

@@ -16,6 +16,9 @@ pub const FREQ_G_SHARP: f32 = 830.61;
 const MIDI_NOTE_BASE_OCTAVE: i8 = -1;
 const MIDI_NOTE_BASE_TONE_OFFSET: u8 = 3; // numeric offset from A i.e. 3 is C
 
+const NORMALIZATION_FREQ: f32 = FREQ_A * 16.0;
+const NORMALIZATION_OCTAVES: f32 = 8.0;
+
 /// Represents the notes within an octave
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Hash)]
 pub enum Tone {
@@ -97,12 +100,21 @@ impl Note {
     
         // E.g. A4 shifted down one octave is 440 * (2^-1) 
         let freq_shift_degree = 2_f32.powi(octave_shift as i32);
-        let freq = default_freq * freq_shift_degree as f32;
-        freq
+        default_freq * freq_shift_degree
+    }
+
+    /// A frequency squished to a value between 0.0 and 1.0 with NORMALIZATION_FREQ representing 1.0
+    pub fn to_freq_normalized(&self) -> f32 {
+        let freq = self.to_freq();
+        (freq / NORMALIZATION_FREQ).min(1.0)
+    }
+
+    pub fn normalized_to_coefficient(normalized: f32) -> f32 {
+        normalized * NORMALIZATION_OCTAVES
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, Hash)]
 pub struct NoteInterval {
     pub note: Note,
     pub start: Option<usize>,
@@ -115,10 +127,10 @@ impl NoteInterval {
     }
 
     pub fn overlaps(&self, other: &NoteInterval) -> bool {
-        let this_start = self.start.or(Some(0)).unwrap();
-        let this_end = self.end.or(Some(usize::MAX)).unwrap();
-        let other_start = other.start.or(Some(0)).unwrap();
-        let other_end = other.end.or(Some(usize::MAX)).unwrap();
+        let this_start = self.start.unwrap_or(0);
+        let this_end = self.end.unwrap_or(usize::MAX);
+        let other_start = other.start.unwrap_or(0);
+        let other_end = other.end.unwrap_or(usize::MAX);
 
         if this_start >= other_start && this_start < other_end {
             // This starts within other
@@ -133,7 +145,7 @@ impl NoteInterval {
             return true;
         }
 
-        return false;
+        false
     }
 }
 

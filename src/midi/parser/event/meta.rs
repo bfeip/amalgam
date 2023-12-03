@@ -1,6 +1,6 @@
 use std::io;
 use super::super::{parse_variable_length, parse_string};
-use crate::midi::error::*;
+use crate::{SynthError, SynthResult};
 
 pub enum MetaEventType {
     SequenceNumber,
@@ -21,7 +21,7 @@ pub enum MetaEventType {
 }
 
 impl MetaEventType {
-    pub fn from_byte(byte: u8) -> MidiResult<Self> {
+    pub fn from_byte(byte: u8) -> SynthResult<Self> {
         let event_type = match byte {
             0x00 => MetaEventType::SequenceNumber,
             0x01 => MetaEventType::TextEvent,
@@ -40,7 +40,7 @@ impl MetaEventType {
             0x7F => MetaEventType::SequencerSpecific,
             _ => {
                 let msg = format!("Unknown MIDI event type {:#04x}", byte);
-                return Err(MidiError::new(&msg));
+                return Err(SynthError::new(&msg));
             }
         };
         Ok(event_type)
@@ -87,7 +87,7 @@ pub enum MetaEvent {
 }
 
 impl MetaEvent {
-    pub fn parse<T: io::Read>(mut midi_stream: T) -> MidiResult<MetaEvent> {
+    pub fn parse<T: io::Read>(mut midi_stream: T) -> SynthResult<MetaEvent> {
         let mut meta_event_type_byte: [u8; 1] = [0; 1];
         read_with_eof_check!(midi_stream, &mut meta_event_type_byte);
         
@@ -95,7 +95,7 @@ impl MetaEvent {
             Ok(size) => size,
             Err(err) => {
                 let msg = format!("Failed to parse MIDI meta event because we couldn't parse size: {}", err);
-                return Err(MidiError::new(&msg));
+                return Err(SynthError::new(&msg));
             }
         };
     
@@ -103,7 +103,7 @@ impl MetaEvent {
             Ok(meta_event_type) => meta_event_type,
             Err(err) => {
                 let msg = format!("Failed to get meta event type: {}", err);
-                return Err(MidiError::new(&msg));
+                return Err(SynthError::new(&msg));
             }
         };
         match meta_event_type {
@@ -121,7 +121,7 @@ impl MetaEvent {
                         let msg = format!(
                             "Failed to parse MIDI meta event because we couldn't parse text event: {}", err
                         );
-                        return Err(MidiError::new(&msg))
+                        return Err(SynthError::new(&msg))
                     }
                 };
                 Ok(MetaEvent::TextEvent{ text })
@@ -134,7 +134,7 @@ impl MetaEvent {
                         let msg = format!(
                             "Failed to parse MIDI meta event because we couldn't parse copyright notice: {}", err
                         );
-                        return Err(MidiError::new(&msg))
+                        return Err(SynthError::new(&msg))
                     }
                 };
                 Ok(MetaEvent::CopyrightNotice{ text })
@@ -147,7 +147,7 @@ impl MetaEvent {
                         let msg = format!(
                             "Failed to parse MIDI meta event because we couldn't parse sequence or track name: {}", err
                         );
-                        return Err(MidiError::new(&msg))
+                        return Err(SynthError::new(&msg))
                     }
                 };
                 Ok(MetaEvent::SequenceOrTrackName{ text })
@@ -160,7 +160,7 @@ impl MetaEvent {
                         let msg = format!(
                             "Failed to parse MIDI meta event because we couldn't parse instrument name: {}", err
                         );
-                        return Err(MidiError::new(&msg))
+                        return Err(SynthError::new(&msg))
                     }
                 };
                 Ok(MetaEvent::InstrumentName{ text })
@@ -173,7 +173,7 @@ impl MetaEvent {
                         let msg = format!(
                             "Failed to parse MIDI meta event because we couldn't parse lyrics: {}", err
                         );
-                        return Err(MidiError::new(&msg))
+                        return Err(SynthError::new(&msg))
                     }
                 };
                 Ok(MetaEvent::Lyrics{ text })
@@ -186,7 +186,7 @@ impl MetaEvent {
                         let msg = format!(
                             "Failed to parse MIDI meta event because we couldn't parse marker: {}", err
                         );
-                        return Err(MidiError::new(&msg))
+                        return Err(SynthError::new(&msg))
                     }
                 };
                 Ok(MetaEvent::Marker{ text })
@@ -199,7 +199,7 @@ impl MetaEvent {
                         let msg = format!(
                             "Failed to parse MIDI meta event because we couldn't parse cue point: {}", err
                         );
-                        return Err(MidiError::new(&msg))
+                        return Err(SynthError::new(&msg))
                     }
                 };
                 Ok(MetaEvent::CuePoint{ text })
@@ -261,7 +261,7 @@ impl MetaEvent {
                     Ok(data) => data,
                     Err(err) => {
                         let msg = format!("Failed to sequencer specific meta event: {}", err);
-                        return Err(MidiError::new(&msg));
+                        return Err(SynthError::new(&msg));
                     }
                 };
                 Ok(MetaEvent::SequencerSpecific{ data })

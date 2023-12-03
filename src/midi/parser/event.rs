@@ -4,7 +4,7 @@ pub mod meta;
 
 use std::io;
 
-use super::super::error::*;
+use crate::{SynthError, SynthResult};
 use super::parse_variable_length;
 use self::channel::MidiChannelEvent;
 use self::system::SystemEvent;
@@ -23,7 +23,7 @@ pub enum EventType {
 }
 
 impl EventType {
-    pub fn from_nybble(nybble: u8) -> MidiResult<Self> {
+    pub fn from_nybble(nybble: u8) -> SynthResult<Self> {
         let event_type = match nybble & 0xF {
             0x8 => EventType::NoteOff,
             0x9 => EventType::NoteOn,
@@ -35,13 +35,13 @@ impl EventType {
             0xF => EventType::MetaOrSystem,
             _   => {
                 let msg = format!("Unknown MIDI event type {:#03x}", nybble);
-                return Err(MidiError::new(&msg))
+                return Err(SynthError::new(&msg))
             }
         };
         Ok(event_type)
     }
 
-    pub fn to_byte(&self) -> u8 {
+    pub fn to_byte(self) -> u8 {
         match self {
             EventType::NoteOff           => 0x08,
             EventType::NoteOn            => 0x09,
@@ -69,12 +69,12 @@ pub struct Event {
 }
 
 impl Event {
-    pub fn parse<T: io::Read>(mut midi_stream: T, divided_event_bytes: &mut Vec<u8>) -> MidiResult<Self> {
+    pub fn parse<T: io::Read>(mut midi_stream: T, divided_event_bytes: &mut Vec<u8>) -> SynthResult<Self> {
         let delta_time = match parse_variable_length(&mut midi_stream) {
             Ok(delta_time) => delta_time,
             Err(err) => {
                 let msg = format!("Failed to get delta-time for event: {}", err);
-                return Err(MidiError::new(&msg));
+                return Err(SynthError::new(&msg));
             }
         };
     
@@ -84,7 +84,7 @@ impl Event {
             Ok(event_type) => event_type,
             Err(err) => {
                 let msg = format!("Failed to get event type from nybble: {}", err);
-                return Err(MidiError::new(&msg));
+                return Err(SynthError::new(&msg));
             }
         };
         let midi_channel = event_type_and_channel_byte[0] & 0xF;
@@ -97,7 +97,7 @@ impl Event {
                     Ok(event) => event,
                     Err(err) => {
                         let msg = format!("Failed to parse meta or system event: {}", err);
-                        return Err(MidiError::new(&msg));
+                        return Err(SynthError::new(&msg));
                     }
                 }
             },
@@ -107,7 +107,7 @@ impl Event {
                     Ok(event) => EventBody::Channel(event),
                     Err(err) => {
                         let msg = format!("Failed to parse channel event: {}", err);
-                        return Err(MidiError::new(&msg));
+                        return Err(SynthError::new(&msg));
                     }
                 }
             }
@@ -119,32 +119,32 @@ impl Event {
     
     fn parse_meta_or_system_event<T: io::Read>(
         midi_stream: T, event_type_and_channel_byte: u8, divided_event_bytes: &mut Vec<u8>
-    ) -> MidiResult<EventBody> {
+    ) -> SynthResult<EventBody> {
         match event_type_and_channel_byte {
             0xFF => {
                 match MetaEvent::parse(midi_stream) {
-                    Ok(meta_event) => return Ok(EventBody::Meta(meta_event)),
+                    Ok(meta_event) => Ok(EventBody::Meta(meta_event)),
                     Err(err) => {
                         let msg = format!("Failed to parse meta event: {}", err);
-                        return Err(MidiError::new(&msg));
+                        Err(SynthError::new(&msg))
                     }
-                };
+                }
             },
             0xF7 | 0xF0 => {
                 match SystemEvent::parse(midi_stream, event_type_and_channel_byte, divided_event_bytes) {
-                    Ok(system_event) => return Ok(EventBody::System(system_event)),
+                    Ok(system_event) => Ok(EventBody::System(system_event)),
                     Err(err) => {
                         let msg = format!("Failed to parse system event: {}", err);
-                        return Err(MidiError::new(&msg));
+                        Err(SynthError::new(&msg))
                     }
-                };
+                }
             }
             _ => {
                 let msg = format!(
                     "Tried to parse meta or system event but got unknown type byte {:#04x}",
                     event_type_and_channel_byte
                 );
-                return Err(MidiError::new(&msg));
+                Err(SynthError::new(&msg))
             }
         }
     }
