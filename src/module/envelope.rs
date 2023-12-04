@@ -212,7 +212,7 @@ mod tests {
 
     struct ConstantTrigger;
     impl SynthModule for ConstantTrigger {
-        fn fill_output_buffer(&mut self, data: &mut [f32], _output_info: &OutputInfo) {
+        fn fill_output_buffer(&self, data: &mut [f32], _output_info: &OutputInfo) {
             for datum in data.iter_mut() {
                 *datum = 1.0;
             }
@@ -221,7 +221,7 @@ mod tests {
 
     struct SplitTrigger;
     impl SynthModule for SplitTrigger {
-        fn fill_output_buffer(&mut self, data: &mut [f32], _output_info: &OutputInfo) {
+        fn fill_output_buffer(&self, data: &mut [f32], _output_info: &OutputInfo) {
             let (trigger_data, untrigger_data) = data.split_at_mut(data.len() / 2);
             for datum in trigger_data.iter_mut() {
                 *datum = 1.0;
@@ -252,7 +252,7 @@ mod tests {
         let output_info = create_output_info(SAMPLE_RATE, EXPECTED_DATA.len());
 
         let trigger = ConstantTrigger {};
-        envelope.set_trigger(trigger.into());
+        envelope.set_trigger(Some(Rc::new(trigger)));
 
         let mut data = Vec::with_capacity(SAMPLE_RATE * 3);
         data.resize(SAMPLE_RATE * 3, 0.0);
@@ -280,7 +280,7 @@ mod tests {
         let output_info = create_output_info(SAMPLE_RATE, EXPECTED_DATA.len());
 
         let trigger = SplitTrigger {};
-        envelope.set_trigger(trigger.into());
+        envelope.set_trigger(Some(Rc::new(trigger)));
 
         let mut data = Vec::with_capacity(SAMPLE_RATE * 4);
         data.resize(SAMPLE_RATE * 4, 0.0);

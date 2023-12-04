@@ -124,8 +124,8 @@ mod tests {
         osc1.set_pulse_width(0.5);
         let mut osc2 = osc1.clone();
         osc2.set_pulse_width(0.25);
-        let mixer_input_1 = MixerInput::with_input(osc1.into());
-        let mixer_input_2 = MixerInput::with_input(osc2.into());
+        let mixer_input_1 = MixerInput::with_input(Some(Rc::new(osc1)));
+        let mixer_input_2 = MixerInput::with_input(Some(Rc::new(osc2)));
         (mixer_input_1, mixer_input_2)
     }
 

@@ -75,10 +75,9 @@ mod tests {
 
     const SAMPLE_RATE: usize = 10;
 
-    fn get_constant_signal(amplitude: f32) -> Connectable<dyn SynthModule> {
+    fn get_constant_signal(amplitude: f32) -> SampleBuffer {
         let samples = vec![amplitude; SAMPLE_RATE];
-        let sample_buffer = SampleBuffer::new(samples);
-        sample_buffer.into()
+        SampleBuffer::new(samples)
     }
 
     fn get_attenuverter_output(attenuverter: &mut Attenuverter) -> Vec<f32> {
@@ -94,7 +93,7 @@ mod tests {
     #[test]
     fn test_gain() {
         let mut attenuverter = Attenuverter::new();
-        attenuverter.set_signal_in(get_constant_signal(1_f32));
+        attenuverter.set_signal_in(Some(Rc::new(get_constant_signal(1_f32))));
         attenuverter.set_gain(0.5);
 
         let output_buffer = get_attenuverter_output(&mut attenuverter);
@@ -106,7 +105,7 @@ mod tests {
     #[test]
     fn test_gain_invert() {
         let mut attenuverter = Attenuverter::new();
-        attenuverter.set_signal_in(get_constant_signal(1_f32));
+        attenuverter.set_signal_in(Some(Rc::new(get_constant_signal(1_f32))));
         attenuverter.set_gain(-0.5);
 
         let output_buffer = get_attenuverter_output(&mut attenuverter);
@@ -118,8 +117,8 @@ mod tests {
     #[test]
     fn test_control() {
         let mut attenuverter = Attenuverter::new();
-        attenuverter.set_signal_in(get_constant_signal(1_f32));
-        attenuverter.set_control_in(get_constant_signal(0.5));
+        attenuverter.set_signal_in(Some(Rc::new(get_constant_signal(1_f32))));
+        attenuverter.set_control_in(Some(Rc::new(get_constant_signal(0.5))));
 
         let output_buffer = get_attenuverter_output(&mut attenuverter);
 
@@ -130,8 +129,8 @@ mod tests {
     #[test]
     fn test_gain_and_control() {
         let mut attenuverter = Attenuverter::new();
-        attenuverter.set_signal_in(get_constant_signal(1_f32));
-        attenuverter.set_control_in(get_constant_signal(0.25));
+        attenuverter.set_signal_in(Some(Rc::new(get_constant_signal(1_f32))));
+        attenuverter.set_control_in(Some(Rc::new(get_constant_signal(0.25))));
         attenuverter.set_gain(0.25);
 
         let output_buffer = get_attenuverter_output(&mut attenuverter);

@@ -291,7 +291,7 @@ mod tests {
         clock_osc.set_frequency(1_f32);
         clock_osc.set_waveform(oscillator::Waveform::Pulse);
         clock_osc.set_pulse_width(0.5);
-        sequencer.set_clock(clock_osc.into());
+        sequencer.set_clock(Some(Rc::new(clock_osc)));
 
         sequencer
     }
@@ -316,7 +316,7 @@ mod tests {
     fn test_stopped_output() {
         const SAMPLE_RATE: usize = 9;
         const EXPECTED_DATA: [f32; 9] = [0.0; 9];
-        let mut sequencer = create_test_sequencer();
+        let sequencer = create_test_sequencer();
 
         let output_info = create_output_info(SAMPLE_RATE, EXPECTED_DATA.len());
 
@@ -337,7 +337,7 @@ mod tests {
     fn test_stopped_output_after_step() {
         const SAMPLE_RATE: usize = 9;
         const EXPECTED_DATA: [f32; 9] = [1.0; 9];
-        let mut sequencer = create_test_sequencer();
+        let sequencer = create_test_sequencer();
 
         let output_info = create_output_info(SAMPLE_RATE, EXPECTED_DATA.len());
 

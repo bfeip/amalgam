@@ -154,10 +154,10 @@ impl SynthModule for MidiNoteOutput {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use super::super::super::common::OutputTimestamp;
     use crate::util::test_util;
 
     use core::panic;
+    use std::time;
 
     fn get_test_midi_module() -> MidiNoteOutput {
         let path = test_util::get_test_midi_file_path();
@@ -178,11 +178,11 @@ mod tests {
     #[test]
     fn get_notes_delta() {
         let mut midi_module = get_test_midi_module();
-        let mut midi_source_lock = midi_module.midi_source.get().unwrap();
-        midi_source_lock.set_channel(Some(0));
-        drop(midi_source_lock);
+        let midi_source = Rc::get_mut(&mut midi_module.midi_source).unwrap();
+        midi_source.set_channel(Some(0));
+        drop(midi_source);
 
-        let delta = match midi_module.read_notes_on_off_delta(10_000_000, &OutputTimestamp::empty()) {
+        let delta = match midi_module.read_notes_on_off_delta(10_000_000, &time::Instant::now()) {
             Ok(delta) => delta,
             Err(err) => {
                 panic!("Failed to get note delta: {}", err);
@@ -204,13 +204,13 @@ mod tests {
 
     #[test]
     fn get_notes_on_absolute() {
-        let midi_module = get_test_midi_module();
+        let mut midi_module = get_test_midi_module();
 
         let target_microseconds = 5_000_000; // Just trust me bro. It'll have three notes on
-        let mut midi_source_lock = midi_module.midi_source.get().unwrap();
-        midi_source_lock.set_time(target_microseconds);
-        midi_source_lock.set_channel(Some(0));
-        drop(midi_source_lock);
+        let midi_source = Rc::get_mut(&mut midi_module.midi_source).unwrap();
+        midi_source.set_time(target_microseconds);
+        midi_source.set_channel(Some(0));
+        drop(midi_source);
         
         let notes_on = match midi_module.get_notes_on_absolute() {
             Ok(notes_on) => notes_on,
@@ -231,7 +231,7 @@ mod tests {
     fn get_active_notes() {
         let on_notes: HashSet<u8> = HashSet::from([1, 4, 3, 5, 2]);
         let mut midi_module = get_test_midi_module();
-        midi_module.active_notes = on_notes.clone();
+        midi_module.active_notes = RefCell::new(on_notes.clone());
         
         let active_notes = midi_module.get_active_notes();
         assert_eq!(*active_notes, on_notes);
